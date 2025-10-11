@@ -31,18 +31,18 @@ Node.js and npm installed on your machine. You can download them from nodejs.org
 **Installation & Running**
 Clone the repo
 
-`git clone https://github.com/your-username/your-repository-name.git'
+`git clone https://github.com/your-username/your-repository-name.git`
 
 Navigate to the project directory
 
-`cd your-repository-name'
+`cd your-repository-name`
 
 Install NPM packages
 
-'npm install'
+`npm install`
 
 Start the server
 
-'npm start'
+`npm start`
 
 The server will start, and you can access the game at **http://localhost:3000** in your web browser. The console will also provide a local network URL that you can use to connect other devices on the same Wi-Fi network for multiplayer testing.
