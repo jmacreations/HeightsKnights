@@ -1,0 +1,56 @@
+/* public/style.css */
+
+body {
+    font-family: 'Press Start 2P', cursive;
+    touch-action: none;
+    overflow: hidden;
+}
+
+.btn {
+    padding: 0.75rem 1.5rem;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.btn:disabled {
+    background-color: #4b5563;
+    cursor: not-allowed;
+}
+
+.btn-green {
+    background-color: #4ade80;
+    color: #1a1a1a;
+    font-weight: bold;
+}
+
+.btn-green:hover:not(:disabled) {
+    background-color: #36b36a;
+}
+
+.input-field {
+    background-color: #374151;
+    border: 2px solid #6b7280;
+    padding: 0.75rem;
+    border-radius: 8px;
+    text-align: center;
+}
+
+#game-container {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.ui-screen {
+    max-width: 90vw;
+}
+
+.hidden {
+    display: none;
+}
+
+#player-hud {
+    min-height: 24px; /* Prevents layout shift when text appears */
+}

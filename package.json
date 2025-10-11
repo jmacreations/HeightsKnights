@@ -1,0 +1,13 @@
+{
+  "name": "heights-knights-server",
+  "version": "2.0.0",
+  "description": "Multiplayer server for Heights Knights",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server/server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5"
+  }
+}
