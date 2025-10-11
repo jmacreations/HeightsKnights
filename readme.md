@@ -1,10 +1,10 @@
-##Heights Knights
+## Heights Knights
 A fast-paced, real-time multiplayer 2D arena shooter built with Node.js, Express, and Socket.IO.
 
-###About The Game
+### About The Game
 Heights Knights is a top-down, last-knight-standing arena game where players battle it out to be the final survivor. Players control a knight in a destructible arena, collecting powerful weapon and shield power-ups to gain an edge over their opponents. The player who is the last one alive at the end of a round scores a point, and the first to reach the score limit wins the match!
 
-###Core Features
+### Core Features
 Real-time Multiplayer: Create or join game rooms that support up to 8 players.
 
 **Diverse Arsenal:** Wield a variety of weapons, including a sword, a chargeable bow, a powerful shotgun, a hitscan laser, and a rapid-fire minigun.
@@ -15,14 +15,14 @@ Real-time Multiplayer: Create or join game rooms that support up to 8 players.
 
 **Modern Tech Stack:** Built with a clean, separated frontend and backend for easy maintenance and scalability.
 
-###Tech Stack
+### Tech Stack
 **Backend:** Node.js, Express, Socket.IO
 
 **Frontend:** HTML5 Canvas, JavaScript (ES Modules), Tailwind CSS
 
 **Deployment:** Configured for services like Render.
 
-###Getting Started
+### Getting Started
 To get a local copy up and running, follow these simple steps.
 
 **Prerequisites**
