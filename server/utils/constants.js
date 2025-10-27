@@ -28,10 +28,20 @@ for (const type in POWERUP_DROP_RATES_RAW) {
 }
 
 const MAP_LAYOUT = [
-    "S              S", " P            P ", "  111      111  ", "  1        1    ",
-    "S 1        1  S ", "                ", "      1111      ", "      1111      ",
-    "                ", "S 1        1  S ", "  1        1    ", "  111      111  ",
-    " P            P ", "S              S",
+    "S              S",
+    "                ",
+    "  111      111  ",
+    "  1    P     1  ",
+    "S 1          1 S",
+    "                ",
+    "      1111  P   ",
+    "   P  1111      ",
+    "                ",
+    "S 1          1 S",
+    "  1     P    1  ",
+    "  111      111  ",
+    "                ",
+    "S              S",
 ];
 const MAP_WIDTH = MAP_LAYOUT[0].length * WALL_SIZE;
 const MAP_HEIGHT = MAP_LAYOUT.length * WALL_SIZE;
