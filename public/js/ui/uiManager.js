@@ -1,4 +1,6 @@
 // public/js/ui/uiManager.js
+import { getModeSelectHTML, addModeSelectListeners } from '../scenes/modeSelectScene.js';
+import { GAME_MODES } from '../config.js';
 
 export function showScreen(screenName) {
     const container = document.getElementById('game-container');
@@ -23,11 +25,15 @@ export function showScreen(screenName) {
                     <p id="menu-error" class="text-red-400 mt-4 text-center h-4"></p>
                 </div>
             </div>`;
+    } else if (screenName === 'MODE_SELECT') {
+        screenHtml = getModeSelectHTML(window.playerName);
     } else if (screenName === 'LOBBY') {
+        const gameModeName = gameState.gameMode ? GAME_MODES[gameState.gameMode]?.name : 'Deathmatch';
         screenHtml = `
             <div id="LOBBY" class="ui-screen flex flex-col items-center p-8 bg-gray-800 rounded-lg shadow-xl w-[500px]">
                 <h2 class="text-3xl mb-2">LOBBY</h2>
-                <p class="text-2xl font-mono bg-gray-900 px-4 py-2 rounded-md mb-6">${roomCode}</p>
+                <p class="text-2xl font-mono bg-gray-900 px-4 py-2 rounded-md mb-2">${roomCode}</p>
+                <p class="text-sm text-gray-400 mb-6">Mode: ${gameModeName}</p>
                 <div id="player-list" class="flex flex-col items-center w-full gap-2 min-h-[100px]"></div>
                 <button id="start-game-btn" class="btn btn-green w-full mt-6 hidden">Start Game</button>
             </div>`;
@@ -44,14 +50,21 @@ export function showScreen(screenName) {
 function addEventListeners(screenName) {
     if (screenName === 'MENU') {
         document.getElementById('create-room-btn').onclick = () => {
-            const name = document.getElementById('name-input').value;
-            if (name) socket.emit('createRoom', name);
+            const name = document.getElementById('name-input').value.trim();
+            if (!name) {
+                document.getElementById('menu-error').textContent = 'Please enter your name';
+                return;
+            }
+            window.playerName = name;
+            showScreen('MODE_SELECT');
         };
         document.getElementById('join-room-btn').onclick = () => {
             const name = document.getElementById('name-input').value;
             const code = document.getElementById('room-code-input').value.toUpperCase();
             if (name && code) socket.emit('joinRoom', { roomCode: code, playerName: name });
         };
+    } else if (screenName === 'MODE_SELECT') {
+        addModeSelectListeners();
     } else if (screenName === 'LOBBY') {
         const startGameBtn = document.getElementById('start-game-btn');
         if (startGameBtn) {

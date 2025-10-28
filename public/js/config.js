@@ -1,5 +1,32 @@
 // public/js/config.js
 
+export const GAME_MODES = {
+    deathmatch: {
+        id: 'deathmatch',
+        name: 'Deathmatch',
+        description: 'Classic free-for-all combat. Last knight standing wins!',
+        minPlayers: 2,
+        maxPlayers: 8,
+        available: true
+    },
+    teamBattle: {
+        id: 'teamBattle',
+        name: 'Team Battle',
+        description: 'Fight in teams! Coordinate with your allies to defeat the enemy.',
+        minPlayers: 4,
+        maxPlayers: 8,
+        available: false // Will be available in future update
+    },
+    captureTheFlag: {
+        id: 'captureTheFlag',
+        name: 'Capture the Flag',
+        description: 'Capture the enemy flag and bring it back to your base.',
+        minPlayers: 4,
+        maxPlayers: 8,
+        available: false // Will be available in future update
+    }
+};
+
 export const WEAPONS_CONFIG = {
     sword: { name: 'Sword', color: '#d1d5db' },
     bow: { name: 'Bow', color: '#facc15', ammo: 20 },

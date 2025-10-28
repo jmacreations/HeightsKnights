@@ -9,6 +9,8 @@ window.myId = null;
 window.roomCode = null;
 window.gameState = {};
 window.uiState = 'MENU';
+window.playerName = '';
+window.selectedGameMode = null;
 
 function main() {
     initializeSocket();

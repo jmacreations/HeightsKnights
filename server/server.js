@@ -18,11 +18,16 @@ const availableColors = ['#4ade80', '#f87171', '#60aeff', '#fbbf24', '#a78bfa', 
 
 
 io.on('connection', (socket) => {
-    socket.on('createRoom', (playerName) => {
+    socket.on('createRoom', (data) => {
+        // Support both old format (string) and new format (object)
+        const playerName = typeof data === 'string' ? data : data.playerName;
+        const gameMode = typeof data === 'object' ? data.gameMode : 'deathmatch';
+        
         let roomCode;
         do { roomCode = Math.random().toString(36).substring(2, 6).toUpperCase(); } while (gameRooms[roomCode]);
         socket.join(roomCode);
         const room = createNewRoom(socket.id, roomCode, playerName, availableColors);
+        room.gameMode = gameMode; // Store selected game mode
         gameRooms[roomCode] = room;
         socket.emit('roomCreated', { roomCode, roomState: room, myId: socket.id });
     });
