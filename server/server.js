@@ -288,7 +288,8 @@ io.on('connection', (socket) => {
             console.log(`Player ${socket.id} disconnected from room ${roomCodeOfDisconnectedPlayer}`);
             delete roomOfDisconnectedPlayer.players[socket.id];
 
-            if (Object.keys(roomOfDisconnectedPlayer.players).length === 0) {
+            const remaining = Object.keys(roomOfDisconnectedPlayer.players).length;
+            if (remaining === 0) {
                 delete gameRooms[roomCodeOfDisconnectedPlayer];
                 console.log(`Room ${roomCodeOfDisconnectedPlayer} is empty and has been deleted.`);
             } else {
@@ -298,10 +299,15 @@ io.on('connection', (socket) => {
                     roomOfDisconnectedPlayer.hostId = newHostId;
                     console.log(`Host disconnected. New host is ${newHostId}`);
                 }
-                
-                // MODIFIED: Force all players back to the lobby for a clean state reset
-                roomOfDisconnectedPlayer.state = 'LOBBY';
-                io.to(roomCodeOfDisconnectedPlayer).emit('returnToLobby', roomOfDisconnectedPlayer);
+                // Only return to lobby if only one player remains
+                if (remaining === 1) {
+                    roomOfDisconnectedPlayer.state = 'LOBBY';
+                    if (roomOfDisconnectedPlayer.countdownInterval) { try { clearInterval(roomOfDisconnectedPlayer.countdownInterval); } catch {} }
+                    io.to(roomCodeOfDisconnectedPlayer).emit('returnToLobby', roomOfDisconnectedPlayer);
+                } else {
+                    // Otherwise, continue the match; lobby UI can be refreshed if needed
+                    io.to(roomCodeOfDisconnectedPlayer).emit('updateLobby', roomOfDisconnectedPlayer);
+                }
             }
         }
     });
