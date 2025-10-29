@@ -1,6 +1,6 @@
 // server/game_logic/player.js
 const {
-    KNIGHT_RADIUS, KNIGHT_SPEED, LUNGE_SPEED_MULTIPLIER, LUNGE_DURATION, LUNGE_COOLDOWN, MAP_WIDTH, MAP_HEIGHT,
+    KNIGHT_RADIUS, KNIGHT_SPEED, LUNGE_SPEED_MULTIPLIER, LUNGE_DURATION, LUNGE_COOLDOWN,
     WEAPONS, SHIELD_MAX_ENERGY
 } = require('../utils/constants');
 const { isCollidingWithWall, getDistance } = require('../utils/helpers');
@@ -61,9 +61,11 @@ function updateKnights(room, deltaTime) {
         player.x = finalX;
         player.y = finalY;
 
-        // Map boundaries
-        player.x = Math.max(KNIGHT_RADIUS, Math.min(MAP_WIDTH - KNIGHT_RADIUS, player.x));
-        player.y = Math.max(KNIGHT_RADIUS, Math.min(MAP_HEIGHT - KNIGHT_RADIUS, player.y));
+    // Map boundaries
+    const MAP_WIDTH = room.mapWidth || 0;
+    const MAP_HEIGHT = room.mapHeight || 0;
+    player.x = Math.max(KNIGHT_RADIUS, Math.min(MAP_WIDTH - KNIGHT_RADIUS, player.x));
+    player.y = Math.max(KNIGHT_RADIUS, Math.min(MAP_HEIGHT - KNIGHT_RADIUS, player.y));
 
         // Powerup collection
         for (let i = room.powerups.length - 1; i >= 0; i--) {

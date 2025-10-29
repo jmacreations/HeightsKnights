@@ -153,14 +153,34 @@ function updateSwordSlashes(room){
                 while (diff > Math.PI) diff -= 2 * Math.PI;
 
                 if (Math.abs(diff) < slash.weapon.arc / 2) {
-                    wall.hp--;
+                    // Only damage destructible walls
+                    if (wall.destructible && wall.hp !== undefined) {
+                        wall.hp--;
+                    }
                     slash.hitWalls.push(wall.id);
                 }
             }
         }
         
-        // Garbage collect dead walls from the room
-        room.walls = room.walls.filter(w => w.hp > 0);
+        // Garbage collect dead walls from the room and track for respawn
+        for (let j = room.walls.length - 1; j >= 0; j--) {
+            const wall = room.walls[j];
+            if (wall.destructible && wall.hp !== undefined && wall.hp <= 0) {
+                // Track destroyed wall for respawn
+                const { WALL_RESPAWN_TIME_MIN, WALL_RESPAWN_TIME_MAX } = require('../utils/constants');
+                const respawnDelay = WALL_RESPAWN_TIME_MIN + Math.random() * (WALL_RESPAWN_TIME_MAX - WALL_RESPAWN_TIME_MIN);
+                room.destroyedWalls.push({
+                    x: wall.x,
+                    y: wall.y,
+                    mapX: wall.mapX,
+                    mapY: wall.mapY,
+                    destroyedTime: Date.now(),
+                    respawnTime: Date.now() + respawnDelay,
+                    lastPlayerCheckTime: Date.now()
+                });
+                room.walls.splice(j, 1);
+            }
+        }
      }
 }
 

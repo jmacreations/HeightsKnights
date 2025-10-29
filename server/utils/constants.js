@@ -6,6 +6,10 @@ const LUNGE_DURATION = 250;
 const LUNGE_COOLDOWN = 2000;
 const WALL_SIZE = 50;
 const WALL_HEALTH = 3;
+const WALL_RESPAWN_TIME_MIN = 10000; // 10 seconds
+const WALL_RESPAWN_TIME_MAX = 15000; // 15 seconds
+const WALL_RESPAWN_PREVIEW_TIME = 500; // 500 milliseconds blink before respawn
+const WALL_PLAYER_CHECK_TIME = 500; // Player must be away for 500 milliseconds
 const SCORE_TO_WIN = 5;
 const SHIELD_MAX_ENERGY = 5000;
 
@@ -28,27 +32,10 @@ for (const type in POWERUP_DROP_RATES_RAW) {
     }
 }
 
-const MAP_LAYOUT = [
-    "S              S",
-    "                ",
-    "  111      111  ",
-    "  1    P     1  ",
-    "S 1          1 S",
-    "                ",
-    "      1111  P   ",
-    "   P  1111      ",
-    "                ",
-    "S 1          1 S",
-    "  1     P    1  ",
-    "  111      111  ",
-    "                ",
-    "S              S",
-];
-const MAP_WIDTH = MAP_LAYOUT[0].length * WALL_SIZE;
-const MAP_HEIGHT = MAP_LAYOUT.length * WALL_SIZE;
-
 module.exports = {
     KNIGHT_RADIUS, KNIGHT_SPEED, LUNGE_SPEED_MULTIPLIER, LUNGE_DURATION, LUNGE_COOLDOWN,
-    WALL_SIZE, WALL_HEALTH, SCORE_TO_WIN, SHIELD_MAX_ENERGY, WEAPONS, POWERUP_SPAWN_DELAY,
-    POWERUP_DROP_TABLE, MAP_LAYOUT, MAP_WIDTH, MAP_HEIGHT
+    WALL_SIZE, WALL_HEALTH, WALL_RESPAWN_TIME_MIN, WALL_RESPAWN_TIME_MAX, 
+    WALL_RESPAWN_PREVIEW_TIME, WALL_PLAYER_CHECK_TIME,
+    SCORE_TO_WIN, SHIELD_MAX_ENERGY, WEAPONS, POWERUP_SPAWN_DELAY,
+    POWERUP_DROP_TABLE
 };

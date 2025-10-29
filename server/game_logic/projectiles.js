@@ -1,5 +1,5 @@
 // server/game_logic/projectiles.js
-const { MAP_WIDTH, MAP_HEIGHT, KNIGHT_RADIUS, WEAPONS } = require('../utils/constants');
+const { KNIGHT_RADIUS, WEAPONS } = require('../utils/constants');
 const { getDistance } = require('../utils/helpers');
 const { handlePlayerHit } = require('./player');
 
@@ -53,6 +53,8 @@ function updateProjectiles(room) {
             let bounced = false;
             
             // Map boundary bouncing
+            const MAP_WIDTH = room.mapWidth || 0;
+            const MAP_HEIGHT = room.mapHeight || 0;
             if (p.x < 0 || p.x > MAP_WIDTH) {
                 p.vx *= -WEAPONS.grenade.bounceDecay;
                 p.x = Math.max(0, Math.min(MAP_WIDTH, p.x));
@@ -102,8 +104,12 @@ function updateProjectiles(room) {
         }
 
         // Regular projectile out of bounds check
-        if (p.x < 0 || p.x > MAP_WIDTH || p.y < 0 || p.y > MAP_HEIGHT) {
-            room.projectiles.splice(i, 1); continue;
+        {
+            const MAP_WIDTH = room.mapWidth || 0;
+            const MAP_HEIGHT = room.mapHeight || 0;
+            if (p.x < 0 || p.x > MAP_WIDTH || p.y < 0 || p.y > MAP_HEIGHT) {
+                room.projectiles.splice(i, 1); continue;
+            }
         }
 
         let hitObject = false;
@@ -112,8 +118,25 @@ function updateProjectiles(room) {
         for (let j = room.walls.length - 1; j >= 0; j--) {
             const wall = room.walls[j];
             if (p.x > wall.x && p.x < wall.x + wall.width && p.y > wall.y && p.y < wall.y + wall.height) {
-                wall.hp--;
-                if (wall.hp <= 0) room.walls.splice(j, 1);
+                // Only damage destructible walls
+                if (wall.destructible && wall.hp !== undefined) {
+                    wall.hp--;
+                    if (wall.hp <= 0) {
+                        // Track destroyed wall for respawn
+                        const { WALL_RESPAWN_TIME_MIN, WALL_RESPAWN_TIME_MAX } = require('../utils/constants');
+                        const respawnDelay = WALL_RESPAWN_TIME_MIN + Math.random() * (WALL_RESPAWN_TIME_MAX - WALL_RESPAWN_TIME_MIN);
+                        room.destroyedWalls.push({
+                            x: wall.x,
+                            y: wall.y,
+                            mapX: wall.mapX,
+                            mapY: wall.mapY,
+                            destroyedTime: Date.now(),
+                            respawnTime: Date.now() + respawnDelay,
+                            lastPlayerCheckTime: Date.now()
+                        });
+                        room.walls.splice(j, 1);
+                    }
+                }
                 hitObject = true;
                 break;
             }
@@ -166,8 +189,25 @@ function explodeGrenade(grenade, room) {
         };
         
         if (getDistance(grenade, wallCenter) < explosionRadius) {
-            wall.hp--;
-            if (wall.hp <= 0) room.walls.splice(j, 1);
+            // Only damage destructible walls
+            if (wall.destructible && wall.hp !== undefined) {
+                wall.hp--;
+                if (wall.hp <= 0) {
+                    // Track destroyed wall for respawn
+                    const { WALL_RESPAWN_TIME_MIN, WALL_RESPAWN_TIME_MAX } = require('../utils/constants');
+                    const respawnDelay = WALL_RESPAWN_TIME_MIN + Math.random() * (WALL_RESPAWN_TIME_MAX - WALL_RESPAWN_TIME_MIN);
+                    room.destroyedWalls.push({
+                        x: wall.x,
+                        y: wall.y,
+                        mapX: wall.mapX,
+                        mapY: wall.mapY,
+                        destroyedTime: Date.now(),
+                        respawnTime: Date.now() + respawnDelay,
+                        lastPlayerCheckTime: Date.now()
+                    });
+                    room.walls.splice(j, 1);
+                }
+            }
         }
     }
 }

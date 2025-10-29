@@ -10,6 +10,10 @@ export function showScreen(screenName) {
     document.getElementById('player-hud').classList.add('hidden');
     uiState = screenName;
 
+    // Notify listeners about screen change (for cleanup like key handlers)
+    const evt = new Event('uiScreenChange');
+    window.dispatchEvent(evt);
+
     let screenHtml = '';
 
     if (screenName === 'MENU') {
@@ -36,7 +40,9 @@ export function showScreen(screenName) {
         const winTypeName = WIN_TYPES[winType]?.name || 'Last Knight Standing';
         const scoreTarget = gameState.matchSettings?.scoreTarget || 5;
         const timeLimit = gameState.matchSettings?.timeLimit || 5;
-        const enabledWeapons = gameState.matchSettings?.enabledWeapons || ['sword', 'bow', 'shotgun', 'laser', 'minigun', 'grenade'];
+    const enabledWeapons = gameState.matchSettings?.enabledWeapons || ['sword', 'bow', 'shotgun', 'laser', 'minigun', 'grenade'];
+    const mapId = gameState.matchSettings?.mapId || 'classic';
+    let mapLabel = mapId === 'classic' ? 'Classic Arena' : mapId;
         const weaponsList = enabledWeapons.map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(', ');
         
         // Build victory condition text
@@ -59,6 +65,7 @@ export function showScreen(screenName) {
                         <p>Victory: <span class="text-white">${winTypeName}</span></p>
                         ${victoryText}
                         <p>Weapons: <span class="text-white text-xs">${weaponsList}</span></p>
+                        <p>Map: <span id="lobby-map-name" class="text-white">${mapLabel}</span></p>
                     </div>
                     <button id="edit-settings-btn" class="hidden bg-gray-700 hover:bg-gray-600 text-white px-3 py-1 rounded text-xs">⚙ Edit</button>
                 </div>
@@ -66,7 +73,17 @@ export function showScreen(screenName) {
                 <button id="start-game-btn" class="btn btn-green w-full mt-6 hidden">Start Game</button>
             </div>`;
     } else if (screenName === 'GAME') {
-        screenHtml = `<canvas id="gameCanvas"></canvas>`;
+        screenHtml = `
+            <div class="relative w-full h-full">
+                <canvas id="gameCanvas"></canvas>
+                <div id="game-menu-modal" class="hidden absolute inset-0 bg-black bg-opacity-60 flex items-center justify-center z-10">
+                    <div class="bg-gray-800 rounded-lg p-6 w-[300px] text-center shadow-xl">
+                        <h3 class="text-xl mb-4">Game Menu</h3>
+                        <div id="menu-buttons" class="space-y-2"></div>
+                        <button id="menu-close" class="mt-4 text-gray-400 hover:text-white text-sm">Resume</button>
+                    </div>
+                </div>
+            </div>`;
         document.getElementById('scoreboard').classList.remove('hidden');
         document.getElementById('player-hud').classList.remove('hidden');
     }
@@ -100,6 +117,17 @@ function addEventListeners(screenName) {
         if (startGameBtn) {
             startGameBtn.onclick = () => socket.emit('startGame', roomCode);
         }
+        // Resolve map name for display
+        const mapNameEl = document.getElementById('lobby-map-name');
+        if (mapNameEl) {
+            socket.emit('getMaps', (res) => {
+                if (res?.ok) {
+                    const m = res.maps.find(m => m.id === (gameState.matchSettings?.mapId || 'classic'));
+                    if (m) mapNameEl.textContent = m.name;
+                    window.availableMaps = res.maps;
+                }
+            });
+        }
         // Host-only: show Edit Settings
         const editBtn = document.getElementById('edit-settings-btn');
         if (editBtn && myId === gameState.hostId) {
@@ -110,9 +138,87 @@ function addEventListeners(screenName) {
             };
         }
     }
+    else if (screenName === 'GAME') {
+        const modal = document.getElementById('game-menu-modal');
+        const buttonsContainer = document.getElementById('menu-buttons');
+        const closeBtn = document.getElementById('menu-close');
+        let escHandler = null;
+        const isHost = myId === gameState.hostId;
+        const renderButtons = () => {
+            buttonsContainer.innerHTML = '';
+            if (isHost) {
+                // Host options: Exit to Lobby, Leave Game
+                const exitBtn = document.createElement('button');
+                exitBtn.className = 'btn btn-green w-full';
+                exitBtn.textContent = 'Exit to Lobby';
+                exitBtn.onclick = () => {
+                    socket.emit('endGame', roomCode);
+                    modal.classList.add('hidden');
+                };
+                const leaveBtn = document.createElement('button');
+                leaveBtn.className = 'btn btn-red w-full';
+                leaveBtn.textContent = 'Leave Game';
+                leaveBtn.onclick = () => {
+                    if (confirm('Are you sure you want to leave the game?')) {
+                        socket.emit('leaveGame', { roomCode }, () => {
+                            window.roomCode = null; window.gameState = {}; window.myId = null; showScreen('MENU');
+                        });
+                    }
+                };
+                buttonsContainer.appendChild(exitBtn);
+                buttonsContainer.appendChild(leaveBtn);
+            } else {
+                // Non-host: Leave Game only
+                const leaveBtn = document.createElement('button');
+                leaveBtn.className = 'btn btn-red w-full';
+                leaveBtn.textContent = 'Leave Game';
+                leaveBtn.onclick = () => {
+                    if (confirm('Are you sure you want to leave the game?')) {
+                        socket.emit('leaveGame', { roomCode }, () => {
+                            window.roomCode = null; window.gameState = {}; window.myId = null; showScreen('MENU');
+                        });
+                    }
+                };
+                buttonsContainer.appendChild(leaveBtn);
+            }
+        };
+
+        escHandler = (e) => {
+            if (e.key === 'Escape') {
+                if (modal.classList.contains('hidden')) {
+                    if (isHost && (gameState.state === 'PLAYING' || gameState.state === 'COUNTDOWN')) {
+                        socket.emit('pauseGame', roomCode, () => {
+                            modal.classList.remove('hidden');
+                            renderButtons();
+                        });
+                    } else {
+                        modal.classList.remove('hidden');
+                        renderButtons();
+                    }
+                } else {
+                    modal.classList.add('hidden');
+                    if (isHost && gameState.state === 'PAUSED') {
+                        socket.emit('resumeGame', roomCode);
+                    }
+                }
+            }
+        };
+        document.addEventListener('keydown', escHandler);
+        closeBtn.onclick = () => {
+            modal.classList.add('hidden');
+            if (isHost && gameState.state === 'PAUSED') {
+                socket.emit('resumeGame', roomCode);
+            }
+        };
+
+        // Cleanup when leaving GAME screen
+        window.addEventListener('uiScreenChange', () => {
+            if (escHandler) document.removeEventListener('keydown', escHandler);
+        }, { once: true });
+    }
 }
 
-export function showMessage(text, duration, isMatchOver = false) {
+export function showMessage(text, duration, isMatchOver = false, matchData = null) {
     let messageEl = document.getElementById('game-message');
     if (!messageEl) {
         messageEl = document.createElement('div');
@@ -120,7 +226,12 @@ export function showMessage(text, duration, isMatchOver = false) {
         messageEl.className = 'absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-5xl text-center bg-black bg-opacity-50 p-6 rounded-lg';
         document.getElementById('game-container').appendChild(messageEl);
     }
-    messageEl.textContent = text;
+    messageEl.innerHTML = '';
+    if (text) {
+        const title = document.createElement('div');
+        title.textContent = text;
+        messageEl.appendChild(title);
+    }
     messageEl.classList.remove('hidden');
 
     if (duration !== Infinity) {
@@ -128,10 +239,29 @@ export function showMessage(text, duration, isMatchOver = false) {
     }
 
     if (isMatchOver) {
-        const playAgainBtn = document.createElement('button');
-        playAgainBtn.textContent = 'Play Again';
-        playAgainBtn.className = 'btn btn-green block mx-auto mt-6 text-2xl';
-        playAgainBtn.onclick = () => socket.emit('playAgain', roomCode);
-        messageEl.appendChild(playAgainBtn);
+        const isHost = myId === (matchData?.hostId || gameState.hostId);
+        if (isHost) {
+            const playAgainBtn = document.createElement('button');
+            playAgainBtn.textContent = 'Play Again';
+            playAgainBtn.className = 'btn btn-green block mx-auto mt-6 text-2xl';
+            playAgainBtn.onclick = () => socket.emit('playAgain', roomCode);
+            messageEl.appendChild(playAgainBtn);
+
+            const exitBtn = document.createElement('button');
+            exitBtn.textContent = 'Exit to Lobby';
+            exitBtn.className = 'btn bg-gray-700 hover:bg-gray-600 block mx-auto mt-3 text-2xl';
+            exitBtn.onclick = () => socket.emit('endGame', roomCode);
+            messageEl.appendChild(exitBtn);
+        } else {
+            const leaveBtn = document.createElement('button');
+            leaveBtn.textContent = 'Leave Game';
+            leaveBtn.className = 'btn btn-red block mx-auto mt-6 text-2xl';
+            leaveBtn.onclick = () => {
+                if (confirm('Are you sure you want to leave the game?')) {
+                    socket.emit('leaveGame', { roomCode }, () => { window.roomCode = null; window.gameState = {}; window.myId = null; showScreen('MENU'); });
+                }
+            };
+            messageEl.appendChild(leaveBtn);
+        }
     }
 }

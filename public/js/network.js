@@ -66,6 +66,15 @@ export function initializeSocket() {
 
     socket.on('matchOver', (data) => {
         updateScoreboard(data.players);
-        showMessage(`${data.players[data.winnerId]?.name} IS VICTORIOUS!`, Infinity, true);
+        showMessage(`${data.players[data.winnerId]?.name} IS VICTORIOUS!`, Infinity, true, data);
+    });
+
+    // Pause/Resume handling
+    socket.on('gamePaused', () => {
+        showMessage('Paused', Infinity, false);
+    });
+    socket.on('gameResumed', () => {
+        // Hide message overlay if visible
+        showMessage('', 0, false);
     });
 }

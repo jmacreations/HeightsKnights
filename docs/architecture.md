@@ -41,7 +41,8 @@ This file summarises the server and client structure of this project.
 ##### `game.js` - Core Game Loop
 - **Room State Management**: Creates and maintains room objects containing players, walls, projectiles, power-ups
 - **Round System**: Handles countdown, round start, round end, match victory
-- **Map Initialization**: Parses MAP_LAYOUT to create walls, spawn points, and power-up locations
+- **Map Initialization**: Parses map layout from JSON maps to create walls, spawn points, and power-up locations
+  - Map edges are implicitly solid, non-destructible boundaries. Do not include border walls in the JSON; the game treats the outer bounds as impassable and non-destructible by default.
 - **Power-up Spawning**: Time-based power-up spawn system with drop tables
 - **Victory Conditions**: Detects last knight standing and awards points
 - **Scoring System**: First to reach SCORE_TO_WIN wins the match

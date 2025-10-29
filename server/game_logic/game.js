@@ -1,5 +1,7 @@
 // server/game_logic/game.js
-const { SCORE_TO_WIN, POWERUP_SPAWN_DELAY, POWERUP_DROP_TABLE, MAP_LAYOUT, WALL_SIZE, WALL_HEALTH, WEAPONS } = require('../utils/constants');
+const { SCORE_TO_WIN, POWERUP_SPAWN_DELAY, POWERUP_DROP_TABLE, WALL_SIZE, WALL_HEALTH, WEAPONS,
+    WALL_RESPAWN_TIME_MIN, WALL_RESPAWN_TIME_MAX, WALL_RESPAWN_PREVIEW_TIME, WALL_PLAYER_CHECK_TIME } = require('../utils/constants');
+const { getMapById } = require('../utils/maps');
 const { updateKnights } = require('./player');
 const { updateProjectiles } = require('./projectiles');
 const { updateLasers, updateSwordSlashes } = require('./weapons');
@@ -7,27 +9,58 @@ const { updateLasers, updateSwordSlashes } = require('./weapons');
 function createNewRoom(hostId, roomCode, playerName, availableColors) {
     const { createNewPlayer } = require('./player');
     const player = createNewPlayer(hostId, playerName, availableColors[0]);
-    return {
+    const room = {
         players: { [hostId]: player }, hostId: hostId, state: 'LOBBY', lastUpdateTime: Date.now(),
-        walls: [], wallIdCounter: 0,
+        walls: [], wallIdCounter: 0, destroyedWalls: [], // Track destroyed walls for respawn
         projectiles: [], powerups: [], swordSlashes: [], laserBeams: [],
         powerupLocations: [], spawnPoints: [], lastPowerupTime: 0, roundWinner: null,
     };
+    // Non-enumerable field to avoid circular JSON in gameState
+    Object.defineProperty(room, 'countdownInterval', { value: null, writable: true, enumerable: false, configurable: true });
+    return room;
 }
 
 function resetRound(room) {
     room.walls = [];
     room.wallIdCounter = 0;
+    room.destroyedWalls = [];
     room.powerupLocations = [];
     room.spawnPoints = [];
+    // Resolve selected map
+    const mapId = room.matchSettings?.mapId || 'classic';
+    const map = getMapById(mapId);
+    room.mapId = map.id;
+    room.mapWidth = map.width;
+    room.mapHeight = map.height;
 
-    MAP_LAYOUT.forEach((row, y) => {
+    map.layout.forEach((row, y) => {
         for (let x = 0; x < row.length; x++) {
             const char = row[x];
             const wallX = x * WALL_SIZE;
             const wallY = y * WALL_SIZE;
             if (char === '1') {
-                room.walls.push({ id: room.wallIdCounter++, x: wallX, y: wallY, width: WALL_SIZE, height: WALL_SIZE, hp: WALL_HEALTH });
+                // Destructible wall
+                room.walls.push({ 
+                    id: room.wallIdCounter++, 
+                    x: wallX, 
+                    y: wallY, 
+                    width: WALL_SIZE, 
+                    height: WALL_SIZE, 
+                    hp: WALL_HEALTH,
+                    destructible: true,
+                    mapX: x,
+                    mapY: y
+                });
+            } else if (char === 'N') {
+                // Non-destructible wall (no hp, cannot be destroyed)
+                room.walls.push({ 
+                    id: room.wallIdCounter++, 
+                    x: wallX, 
+                    y: wallY, 
+                    width: WALL_SIZE, 
+                    height: WALL_SIZE,
+                    destructible: false
+                });
             } else if (char === 'P') {
                 room.powerupLocations.push({ x: wallX + WALL_SIZE / 2, y: wallY + WALL_SIZE / 2 });
             } else if (char === 'S') {
@@ -38,7 +71,6 @@ function resetRound(room) {
 
     // Randomize spawn point assignments
     const shuffledSpawnPoints = [...room.spawnPoints].sort(() => Math.random() - 0.5);
-    const now = Date.now();
     const INVULNERABILITY_DURATION = 1500; // 1.5 seconds
     
     Object.values(room.players).forEach((player, index) => {
@@ -50,7 +82,7 @@ function resetRound(room) {
         player.hasShield = false;
         player.shieldEnergy = 0;
         player.isInvulnerable = true;
-        player.invulnerableUntil = now + 3000 + INVULNERABILITY_DURATION; // After countdown + invuln window
+        player.invulnerableUntil = 0; // Will be set when match actually starts
         player.respawnTime = 0;
     });
 
@@ -60,21 +92,38 @@ function resetRound(room) {
     room.powerups = [];
     room.lastPowerupTime = Date.now();
     
-    // Initialize timer for time-based mode
+    // Initialize countdown state (PAUSE-aware)
     const winType = room.matchSettings?.winType || 'LAST_KNIGHT_STANDING';
-    if (winType === 'TIME_BASED') {
-        const timeLimit = room.matchSettings?.timeLimit || 5; // minutes
-        room.matchStartTime = Date.now() + 3000; // After countdown
-        room.matchEndTime = room.matchStartTime + (timeLimit * 60 * 1000);
+    room.state = 'COUNTDOWN';
+    room.countdownRemaining = 3;
+    if (room.countdownInterval) { clearInterval(room.countdownInterval); room.countdownInterval = null; }
+    if (!Object.getOwnPropertyDescriptor(room, 'countdownInterval')) {
+        Object.defineProperty(room, 'countdownInterval', { value: null, writable: true, enumerable: false, configurable: true });
     }
-    
-    io.to(room.code).emit('countdown', 3);
-    setTimeout(() => io.to(room.code).emit('countdown', 2), 1000);
-    setTimeout(() => io.to(room.code).emit('countdown', 1), 2000);
-    setTimeout(() => {
-        io.to(room.code).emit('countdown', 0);
-        room.state = 'PLAYING'; // Set state to PLAYING only AFTER countdown finishes
-    }, 3000);
+    io.to(room.code).emit('countdown', room.countdownRemaining);
+    room.countdownInterval = setInterval(() => {
+        if (room.state === 'PAUSED') return; // pause-aware countdown
+        room.countdownRemaining -= 1;
+        io.to(room.code).emit('countdown', Math.max(0, room.countdownRemaining));
+        if (room.countdownRemaining <= 0) {
+            clearInterval(room.countdownInterval); room.countdownInterval = null;
+            room.state = 'PLAYING';
+            // Set invulnerability start now
+            const nowStart = Date.now();
+            Object.values(room.players).forEach(p => {
+                if (p.isAlive) {
+                    p.isInvulnerable = true;
+                    p.invulnerableUntil = nowStart + INVULNERABILITY_DURATION;
+                }
+            });
+            // Initialize timer for time-based mode when match actually starts
+            if (winType === 'TIME_BASED') {
+                const timeLimit = room.matchSettings?.timeLimit || 5; // minutes
+                room.matchStartTime = nowStart;
+                room.matchEndTime = room.matchStartTime + (timeLimit * 60 * 1000);
+            }
+        }
+    }, 1000);
 }
 
 function updatePowerups(room) {
@@ -104,6 +153,57 @@ function updatePowerups(room) {
                 const spawnLoc = available[Math.floor(Math.random() * available.length)];
                 const spawnType = potentialSpawns[Math.floor(Math.random() * potentialSpawns.length)];
                 room.powerups.push({ ...spawnLoc, type: spawnType });
+            }
+        }
+    }
+}
+
+function updateWallRespawns(room) {
+    const now = Date.now();
+    const { getDistance } = require('../utils/helpers');
+    
+    // Check destroyed walls for respawn
+    for (let i = room.destroyedWalls.length - 1; i >= 0; i--) {
+        const dWall = room.destroyedWalls[i];
+        
+        // Check if wall is ready to preview (respawn time - preview time)
+        if (!dWall.previewStartTime && now >= dWall.respawnTime - WALL_RESPAWN_PREVIEW_TIME) {
+            dWall.previewStartTime = now;
+            dWall.lastPlayerCheckTime = now;
+        }
+        
+        // If in preview mode, check for players nearby
+        if (dWall.previewStartTime) {
+            const wallCenter = {
+                x: dWall.x + WALL_SIZE / 2,
+                y: dWall.y + WALL_SIZE / 2
+            };
+            
+            // Check if any player is near the wall
+            let playerNearby = false;
+            for (const player of Object.values(room.players)) {
+                if (player.isAlive && getDistance(player, wallCenter) < WALL_SIZE * 1.5) {
+                    playerNearby = true;
+                    dWall.lastPlayerCheckTime = now; // Reset timer
+                    break;
+                }
+            }
+            
+            // If no player nearby for required time and preview is complete, respawn the wall
+            if (!playerNearby && now - dWall.lastPlayerCheckTime >= WALL_PLAYER_CHECK_TIME && now >= dWall.respawnTime) {
+                // Respawn the wall
+                room.walls.push({
+                    id: room.wallIdCounter++,
+                    x: dWall.x,
+                    y: dWall.y,
+                    width: WALL_SIZE,
+                    height: WALL_SIZE,
+                    hp: WALL_HEALTH,
+                    destructible: true,
+                    mapX: dWall.mapX,
+                    mapY: dWall.mapY
+                });
+                room.destroyedWalls.splice(i, 1);
             }
         }
     }
@@ -152,6 +252,7 @@ function gameLoop(room, deltaTime) {
     updateProjectiles(room);
     updateSwordSlashes(room);
     updatePowerups(room);
+    updateWallRespawns(room); // Check for wall respawns
     
     // Clean up old explosions
     if (room.explosions) {

@@ -63,13 +63,40 @@ function handleInput() {
 function draw() {
     if(!gameState.players || uiState !== 'GAME') return; 
     const now = Date.now();
+    // Ensure canvas matches current map dimensions if available
+    if (gameState.mapWidth && gameState.mapHeight && (gameCanvas.width !== gameState.mapWidth || gameCanvas.height !== gameState.mapHeight)) {
+        resizeCanvas();
+    }
     ctx.clearRect(0, 0, gameCanvas.width, gameCanvas.height);
     ctx.fillStyle = '#2c2c2c'; ctx.fillRect(0, 0, gameCanvas.width, gameCanvas.height);
+    
+    // Draw walls
     const wallColors = ['#9ca3af', '#6b7280', '#4b5563'];
     gameState.walls?.forEach(wall => {
-        ctx.fillStyle = wallColors[wall.hp - 1] || '#374151';
+        if (wall.destructible === false) {
+            // Non-destructible walls are black
+            ctx.fillStyle = '#000000';
+        } else {
+            // Destructible walls show health with colors
+            ctx.fillStyle = wallColors[wall.hp - 1] || '#374151';
+        }
         ctx.fillRect(wall.x, wall.y, wall.width, wall.height);
     });
+    
+    // Draw respawning walls (preview/blink effect)
+    gameState.destroyedWalls?.forEach(dWall => {
+        if (dWall.previewStartTime) {
+            const previewAge = now - dWall.previewStartTime;
+            const blinkInterval = 200; // Blink every 200ms
+            const isVisible = Math.floor(previewAge / blinkInterval) % 2 === 0;
+            
+            if (isVisible) {
+                ctx.fillStyle = 'rgba(107, 114, 128, 0.5)'; // 50% opacity gray
+                ctx.fillRect(dWall.x, dWall.y, 50, 50); // WALL_SIZE = 50
+            }
+        }
+    });
+    
     gameState.powerups?.forEach(p => {
         ctx.fillStyle = WEAPONS_CONFIG[p.type]?.color || 'white';
         ctx.beginPath(); ctx.arc(p.x, p.y, 15, 0, Math.PI*2); ctx.fill();
@@ -274,8 +301,10 @@ function gameLoop() {
 }
 
 function resizeCanvas(){
-    const mapPixelWidth = 16 * WALL_SIZE;
-    const mapPixelHeight = 14 * WALL_SIZE;
+    const defaultWidth = 16 * WALL_SIZE;
+    const defaultHeight = 14 * WALL_SIZE;
+    const mapPixelWidth = (typeof gameState?.mapWidth === 'number' && gameState.mapWidth > 0) ? gameState.mapWidth : defaultWidth;
+    const mapPixelHeight = (typeof gameState?.mapHeight === 'number' && gameState.mapHeight > 0) ? gameState.mapHeight : defaultHeight;
     const scoreboard = document.getElementById('scoreboard');
     const availableHeight = window.innerHeight - (scoreboard.offsetHeight + 60); 
     const availableWidth = window.innerWidth;

@@ -54,15 +54,25 @@ export function getMatchSettingsHTML(playerName, gameMode) {
         }).join('');
     
     return `
-        <div id="MATCH_SETTINGS" class="ui-screen flex flex-col items-center p-8 bg-gray-800 rounded-lg shadow-xl max-w-2xl">
+        <div id="MATCH_SETTINGS" class="ui-screen flex flex-col items-center p-6 bg-gray-800 rounded-lg shadow-xl max-w-3xl" style="max-height: 80vh; overflow: hidden;">
             <button id="back-settings-btn" class="self-start mb-4 text-gray-400 hover:text-white">
                 ← ${inLobby ? 'Back to Lobby' : 'Back'}
             </button>
             <h1 class="text-4xl mb-2">Match Settings</h1>
             <p class="text-gray-400 mb-2">Mode: <span class="text-white">${modeDisplay}</span></p>
             <p class="text-gray-400 mb-6">Host: <span class="text-white">${playerName}</span></p>
-            
-            <div class="w-full max-w-md space-y-6">
+            <div id="settings-scroll" class="w-full max-w-3xl space-y-6" style="max-height: 65vh; overflow-y: auto; padding-right: 8px;">
+                <!-- Map Selection -->
+                <div class="bg-gray-700 p-4 rounded-lg">
+                    <label class="block text-lg font-bold mb-3">Map</label>
+                    <div class="flex gap-4 items-start">
+                        <div id="map-select-container" class="flex-1">
+                            <select id="map-select" class="input-field w-full"></select>
+                            <div id="map-meta" class="text-xs text-gray-400 mt-1"></div>
+                        </div>
+                        <canvas id="map-preview" class="bg-gray-900 rounded border border-gray-600" width="240" height="180" style="flex:0 0 auto"></canvas>
+                    </div>
+                </div>
                 <!-- Win Type Selection -->
                 <div class="bg-gray-700 p-4 rounded-lg">
                     <label class="block text-lg font-bold mb-3">Victory Condition</label>
@@ -138,6 +148,7 @@ export function addMatchSettingsListeners() {
         : 'LAST_KNIGHT_STANDING';
     let currentScore = 5;
     let currentTimeLimit = 5; // minutes
+    let currentMapId = (inLobby && window.gameState?.matchSettings?.mapId) ? window.gameState.matchSettings.mapId : 'classic';
     
     if (inLobby && window.gameState?.matchSettings) {
         currentScore = Number(window.gameState.matchSettings.scoreTarget) || 5;
@@ -161,6 +172,10 @@ export function addMatchSettingsListeners() {
     const timeDisplay = document.getElementById('time-display');
     const timeDecreaseBtn = document.getElementById('time-decrease');
     const timeIncreaseBtn = document.getElementById('time-increase');
+    const mapSelectEl = document.getElementById('map-select');
+    const mapMetaEl = document.getElementById('map-meta');
+    const mapPreviewCanvas = document.getElementById('map-preview');
+    const mapPreviewCtx = mapPreviewCanvas?.getContext ? mapPreviewCanvas.getContext('2d') : null;
     
     // Update UI based on win type
     function updateUIForWinType(winType) {
@@ -287,6 +302,7 @@ export function addMatchSettingsListeners() {
             winType: currentWinType,
             scoreTarget: currentScore,
             timeLimit: currentTimeLimit,
+            mapId: currentMapId,
             enabledWeapons: enabledWeapons
         };
         
@@ -313,4 +329,94 @@ export function addMatchSettingsListeners() {
     updateUIForWinType(currentWinType);
     updateScoreDisplay();
     updateTimeDisplay();
+
+    function drawMapPreview(map) {
+        if (!map || !mapPreviewCtx || !mapPreviewCanvas) return;
+        const rows = map.layout.length;
+        const cols = map.layout[0].length;
+        // Compute tile size to fit canvas while preserving aspect
+        const maxW = mapPreviewCanvas.width;
+        const maxH = mapPreviewCanvas.height;
+        const tileW = Math.floor(Math.min(maxW / cols, maxH / rows));
+        const canvasW = tileW * cols;
+        const canvasH = tileW * rows;
+        // center the map inside the canvas
+        const offsetX = Math.floor((maxW - canvasW) / 2);
+        const offsetY = Math.floor((maxH - canvasH) / 2);
+        // Clear
+        mapPreviewCtx.fillStyle = '#111827';
+        mapPreviewCtx.fillRect(0, 0, maxW, maxH);
+        
+        // Draw tiles
+        for (let y = 0; y < rows; y++) {
+            const row = map.layout[y];
+            for (let x = 0; x < cols; x++) {
+                const ch = row[x];
+                const px = offsetX + x * tileW;
+                const py = offsetY + y * tileW;
+                if (ch === '1') {
+                    mapPreviewCtx.fillStyle = '#6b7280'; // destructible
+                    mapPreviewCtx.fillRect(px, py, tileW, tileW);
+                } else if (ch === 'N') {
+                    mapPreviewCtx.fillStyle = '#000000'; // non-destructible
+                    mapPreviewCtx.fillRect(px, py, tileW, tileW);
+                } else if (ch === 'P') {
+                    mapPreviewCtx.fillStyle = '#f59e0b'; // powerup
+                    mapPreviewCtx.beginPath();
+                    mapPreviewCtx.arc(px + tileW/2, py + tileW/2, Math.max(2, tileW*0.3), 0, Math.PI*2);
+                    mapPreviewCtx.fill();
+                } else if (ch === 'S') {
+                    mapPreviewCtx.strokeStyle = '#10b981'; // spawn
+                    mapPreviewCtx.lineWidth = Math.max(1, Math.floor(tileW*0.15));
+                    mapPreviewCtx.beginPath();
+                    mapPreviewCtx.arc(px + tileW/2, py + tileW/2, Math.max(2, tileW*0.35), 0, Math.PI*2);
+                    mapPreviewCtx.stroke();
+                }
+            }
+        }
+        // Draw implicit border to indicate bounds
+        mapPreviewCtx.strokeStyle = '#374151';
+        mapPreviewCtx.lineWidth = 2;
+        mapPreviewCtx.strokeRect(offsetX, offsetY, canvasW, canvasH);
+    }
+
+    function fetchAndPreview(mapId) {
+        socket.emit('getMap', mapId, (res) => {
+            if (res?.ok) {
+                drawMapPreview(res.map);
+            }
+        });
+    }
+
+    // Populate maps
+    if (mapSelectEl) {
+        socket.emit('getMaps', (res) => {
+            if (res?.ok) {
+                mapSelectEl.innerHTML = '';
+                res.maps.forEach(m => {
+                    const opt = document.createElement('option');
+                    opt.value = m.id;
+                    opt.textContent = `${m.name} (${m.cols}x${m.rows})`;
+                    mapSelectEl.appendChild(opt);
+                });
+                mapSelectEl.value = currentMapId;
+                const selected = res.maps.find(m => m.id === currentMapId) || res.maps[0];
+                if (selected) {
+                    mapMetaEl.textContent = selected.author ? `by ${selected.author}` : '';
+                    currentMapId = selected.id;
+                    fetchAndPreview(currentMapId);
+                }
+                mapSelectEl.onchange = () => {
+                    const sel = res.maps.find(m => m.id === mapSelectEl.value);
+                    currentMapId = sel?.id || 'classic';
+                    mapMetaEl.textContent = sel?.author ? `by ${sel.author}` : '';
+                    fetchAndPreview(currentMapId);
+                };
+            } else {
+                mapSelectEl.innerHTML = `<option value="classic">Classic Arena</option>`;
+                currentMapId = 'classic';
+                fetchAndPreview(currentMapId);
+            }
+        });
+    }
 }

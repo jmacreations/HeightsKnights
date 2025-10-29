@@ -4,6 +4,7 @@ const http = require('http');
 const socketIO = require('socket.io');
 const os = require('os');
 const { gameLoop, createNewRoom, resetRound } = require('./game_logic/game');
+const { getMaps, getMapById } = require('./utils/maps');
 const { createNewPlayer, handleLunge } = require('./game_logic/player');
 const { handleAttackStart, handleAttackEnd } = require('./game_logic/weapons');
 
@@ -18,6 +19,25 @@ const availableColors = ['#4ade80', '#f87171', '#60aeff', '#fbbf24', '#a78bfa', 
 
 
 io.on('connection', (socket) => {
+    // Provide available maps to clients
+    socket.on('getMaps', (ack) => {
+        try {
+            const maps = getMaps();
+            if (typeof ack === 'function') ack({ ok: true, maps });
+        } catch (e) {
+            if (typeof ack === 'function') ack({ ok: false, error: e.message });
+        }
+    });
+
+    // Provide a single map's full details (including layout) for preview
+    socket.on('getMap', (mapId, ack) => {
+        try {
+            const map = getMapById(typeof mapId === 'string' ? mapId : (mapId?.id || 'classic'));
+            if (typeof ack === 'function') ack({ ok: true, map });
+        } catch (e) {
+            if (typeof ack === 'function') ack({ ok: false, error: e.message });
+        }
+    });
     socket.on('createRoom', (data) => {
         // Support both old format (string) and new format (object)
         const playerName = typeof data === 'string' ? data : data.playerName;
@@ -35,6 +55,7 @@ io.on('connection', (socket) => {
             winType: matchSettings?.winType || 'LAST_KNIGHT_STANDING',
             scoreTarget: matchSettings?.scoreTarget || 5,
             timeLimit: matchSettings?.timeLimit || 5, // in minutes
+            mapId: (matchSettings?.mapId && getMapById(matchSettings.mapId)?.id) || 'classic',
             enabledWeapons: Array.isArray(matchSettings?.enabledWeapons) 
                 ? matchSettings.enabledWeapons.filter(w => typeof w === 'string')
                 : ['sword', 'bow', 'shotgun', 'laser', 'minigun', 'grenade']
@@ -94,17 +115,106 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('playAgain', (roomCode) => {
+    socket.on('playAgain', (roomCode, ack) => {
         const room = gameRooms[roomCode];
         if (room && room.hostId === socket.id) {
-            // Reset scores and state for a new match
+            // Reset scores and immediately start a fresh match (countdown + resetRound)
             Object.values(room.players).forEach(p => {
                 p.score = 0;
                 p.isAlive = true;
             });
             room.state = 'LOBBY';
-            // Send everyone back to the lobby screen
+            // Kick off a new round
+            io.to(roomCode).emit('gameStarting');
+            resetRound(room);
+            ack && ack({ ok: true });
+        } else {
+            ack && ack({ ok: false, error: 'Only host can play again' });
+        }
+    });
+
+    // Host-only: end current game and return all players to lobby without resetting scores
+    socket.on('endGame', (roomCode, ack) => {
+        try {
+            const room = gameRooms[roomCode];
+            if (!room) throw new Error('Room not found');
+            if (room.hostId !== socket.id) throw new Error('Only the host can end the game');
+            // Stop gameplay and return to lobby
+            room.state = 'LOBBY';
+            if (room.countdownInterval) { clearInterval(room.countdownInterval); room.countdownInterval = null; }
+            room.walls = [];
+            room.projectiles = [];
+            room.powerups = [];
+            room.swordSlashes = [];
+            room.laserBeams = [];
+            room.destroyedWalls = [];
             io.to(roomCode).emit('returnToLobby', room);
+            ack && ack({ ok: true });
+        } catch (e) {
+            ack && ack({ ok: false, error: e.message });
+        }
+    });
+
+    // Player leaves the current game/room
+    socket.on('leaveGame', ({ roomCode }, ack) => {
+        try {
+            const room = gameRooms[roomCode];
+            if (!room) {
+                ack && ack({ ok: true });
+                return;
+            }
+            // Remove player
+            delete room.players[socket.id];
+            // If no players left, delete room
+            if (Object.keys(room.players).length === 0) {
+                delete gameRooms[roomCode];
+                ack && ack({ ok: true });
+                return;
+            }
+            // Reassign host if needed
+            if (room.hostId === socket.id) {
+                const newHostId = Object.keys(room.players)[0];
+                room.hostId = newHostId;
+            }
+            // Only send remaining players to lobby if just one player remains
+            if (Object.keys(room.players).length === 1) {
+                room.state = 'LOBBY';
+                io.to(roomCode).emit('returnToLobby', room);
+            }
+            // Acknowledge to the leaver so client can go to MENU
+            ack && ack({ ok: true });
+        } catch (e) {
+            ack && ack({ ok: false, error: e.message });
+        }
+    });
+
+    // Host-only: pause and resume gameplay
+    socket.on('pauseGame', (roomCode, ack) => {
+        try {
+            const room = gameRooms[roomCode];
+            if (!room) throw new Error('Room not found');
+            if (room.hostId !== socket.id) throw new Error('Only host can pause');
+            if (room.state !== 'PLAYING' && room.state !== 'COUNTDOWN') throw new Error('Can only pause during gameplay or countdown');
+            room.prevState = room.state;
+            room.state = 'PAUSED';
+            io.to(roomCode).emit('gamePaused');
+            ack && ack({ ok: true });
+        } catch (e) {
+            ack && ack({ ok: false, error: e.message });
+        }
+    });
+    socket.on('resumeGame', (roomCode, ack) => {
+        try {
+            const room = gameRooms[roomCode];
+            if (!room) throw new Error('Room not found');
+            if (room.hostId !== socket.id) throw new Error('Only host can resume');
+            if (room.state !== 'PAUSED') throw new Error('Game is not paused');
+            room.state = room.prevState || 'PLAYING';
+            delete room.prevState;
+            io.to(roomCode).emit('gameResumed');
+            ack && ack({ ok: true });
+        } catch (e) {
+            ack && ack({ ok: false, error: e.message });
         }
     });
 
@@ -116,7 +226,7 @@ io.on('connection', (socket) => {
             if (room.hostId !== socket.id) throw new Error('Only the host can change settings');
             if (room.state !== 'LOBBY') throw new Error('Settings can only be changed in the lobby');
 
-            const next = { ...(room.matchSettings || { winType: 'LAST_KNIGHT_STANDING', scoreTarget: 5, timeLimit: 5 }), ...(settings || {}) };
+            const next = { ...(room.matchSettings || { winType: 'LAST_KNIGHT_STANDING', scoreTarget: 5, timeLimit: 5, mapId: 'classic' }), ...(settings || {}) };
             
             // Sanitize winType
             const validWinTypes = ['LAST_KNIGHT_STANDING', 'KILL_BASED', 'TIME_BASED'];
@@ -131,6 +241,14 @@ io.on('connection', (socket) => {
             // Sanitize timeLimit (in minutes)
             if (typeof next.timeLimit !== 'number') next.timeLimit = Number(next.timeLimit) || 5;
             next.timeLimit = Math.max(1, Math.min(15, next.timeLimit));
+
+            // Sanitize mapId
+            if (next.mapId && typeof next.mapId === 'string') {
+                const found = getMapById(next.mapId);
+                next.mapId = found?.id || room.matchSettings.mapId || 'classic';
+            } else {
+                next.mapId = room.matchSettings.mapId || 'classic';
+            }
 
             // Sanitize enabledWeapons: ensure it's an array and includes 'sword'
             if (Array.isArray(next.enabledWeapons)) {

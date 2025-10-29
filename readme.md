@@ -46,3 +46,100 @@ Start the server
 `npm start`
 
 The server will start, and you can access the game at http://localhost:3000 in your web browser. The console will also provide a local network URL that you can use to connect other devices on the same Wi-Fi network for multiplayer testing.
+
+## Creating Custom Maps
+
+You can add your own maps by dropping JSON files into `server/maps/`. The game discovers maps automatically and exposes them in the Match Settings → Map dropdown for the host.
+
+### JSON schema
+- id: string (unique id for the map)
+- name: string (display name)
+- layout: array of strings, all rows must be the same length (rectangular grid)
+- author: string (optional)
+- description: string (optional)
+
+### Tile legend
+- space: empty floor
+- `1`: destructible wall (has HP and can be destroyed; will respawn per game rules)
+- `N`: non-destructible wall (indestructible interior wall or pillar)
+- `P`: power-up spawn point
+- `S`: player spawn point
+
+Important: Map edges are implicitly solid, non-destructible boundaries. Do not draw border walls in the JSON; the game treats the outer bounds as impassable by default.
+
+### Example
+```json
+{
+	"id": "duel",
+	"name": "Duel Pit",
+	"layout": [
+		"                ",
+		" S            S ",
+		"                ",
+		"    111    111  ",
+		"    1        1  ",
+		"    1   P    1  ",
+		"    1        1  ",
+		"    111    111  ",
+		"                ",
+		" S            S ",
+		"                "
+	],
+	"author": "Built-in"
+}
+```
+
+### Sizing and boundaries
+- Tile size: 50px (`WALL_SIZE`)
+- Map width = number of columns × tile size
+- Map height = number of rows × tile size
+- The client canvas automatically resizes to the active map.
+
+### Notes
+- Layout must be perfectly rectangular (all rows equal length).
+- Place files in `server/maps/` with a `.json` extension. Each file may contain a single object or an array of map objects.
+- After adding or changing maps, restart the server to ensure they are loaded.
+
+### Creating Custom Maps
+Maps are simple JSON files located in `server/maps`. Each file defines a grid layout using characters per tile:
+
+- `1` = Destructible wall block
+- `N` = Non-destructible wall block (indestructible, drawn black)
+- `P` = Power-up spawn point
+- `S` = Player spawn point
+- Space ` ` = Empty floor
+
+Example (`server/maps/classic.json`):
+
+```
+{
+	"id": "classic",
+	"name": "Classic Arena",
+	"layout": [
+		"S              S",
+		"                ",
+		"  N11      11N  ",
+		"  1    P     1  ",
+		"S 1          1 S",
+		"  N          N  ",
+		"  N   N11N  P1  ",
+		"  1P  N11N   N  ",
+		"  N          N  ",
+		"S 1          1 S",
+		"  1     P    1  ",
+		"  N11      11N  ",
+		"                ",
+		"S              S"
+	],
+	"author": "Your Name"
+}
+```
+
+Guidelines:
+
+- All layout strings must be the same length (rectangular grid)
+- Map dimensions are derived from layout size × tile size; the tile size is fixed in code
+- Include at least 2 `S` tiles for spawn variety; add `P` tiles for powerups
+- Save the file with a `.json` extension inside `server/maps/`
+
+Once added, the map appears in the Match Settings “Map” dropdown. No server restart is required if you replace existing files; for new files, restart the server to ensure they’re loaded at startup.
