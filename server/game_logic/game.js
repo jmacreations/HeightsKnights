@@ -36,8 +36,11 @@ function resetRound(room) {
         }
     });
 
+    // Randomize spawn point assignments
+    const shuffledSpawnPoints = [...room.spawnPoints].sort(() => Math.random() - 0.5);
+    
     Object.values(room.players).forEach((player, index) => {
-        const spawnPoint = room.spawnPoints[index % room.spawnPoints.length];
+        const spawnPoint = shuffledSpawnPoints[index % shuffledSpawnPoints.length];
         player.x = spawnPoint.x;
         player.y = spawnPoint.y;
         player.isAlive = true;
@@ -76,6 +79,7 @@ function updatePowerups(room) {
             const powerupsInPlay = Object.values(room.players).map(p => p.weapon.type);
             if (powerupsInPlay.includes('minigun')) potentialSpawns = potentialSpawns.filter(t => t !== 'minigun');
             if (powerupsInPlay.includes('laser')) potentialSpawns = potentialSpawns.filter(t => t !== 'laser');
+            if (powerupsInPlay.includes('grenade')) potentialSpawns = potentialSpawns.filter(t => t !== 'grenade');
 
             if (potentialSpawns.length > 0) {
                 const spawnLoc = available[Math.floor(Math.random() * available.length)];
@@ -94,6 +98,12 @@ function gameLoop(room, deltaTime) {
     updateProjectiles(room);
     updateSwordSlashes(room);
     updatePowerups(room);
+    
+    // Clean up old explosions
+    if (room.explosions) {
+        const now = Date.now();
+        room.explosions = room.explosions.filter(exp => now - exp.startTime < 500);
+    }
 
     const livingKnights = Object.values(room.players).filter(p => p.isAlive);
     if (livingKnights.length <= 1) {

@@ -11,6 +11,8 @@ function handleAttackStart(player, room) {
 
     if (player.weapon.type === 'bow') {
         player.bowChargeStartTime = now;
+    } else if (player.weapon.type === 'grenade') {
+        player.grenadeChargeStartTime = now;
     } else if (player.weapon.type === 'laser') {
         player.laserChargeTime = now + WEAPONS.laser.chargeTime;
         player.lastAttackTime = now; // Set cooldown start time immediately
@@ -21,6 +23,7 @@ function handleAttackStart(player, room) {
 
 function handleAttackEnd(player, room) {
     const now = Date.now();
+    
     if (player.weapon.type === 'bow' && player.bowChargeStartTime > 0) {
         if (now < player.lastAttackTime + player.weapon.cooldown) return;
         if (player.weapon.ammo <= 0) return;
@@ -35,6 +38,23 @@ function handleAttackEnd(player, room) {
         createProjectile(player, room, player.angle, speed, player.weapon.type);
         
         player.bowChargeStartTime = 0;
+        player.lastAttackTime = now;
+        player.weapon.ammo--;
+        if (player.weapon.ammo === 0) player.weapon = { ...WEAPONS.sword };
+    } else if (player.weapon.type === 'grenade' && player.grenadeChargeStartTime > 0) {
+        if (now < player.lastAttackTime + player.weapon.cooldown) return;
+        if (player.weapon.ammo <= 0) return;
+
+        const chargeDuration = now - player.grenadeChargeStartTime;
+        const maxChargeTime = 1000;
+        const chargeProgress = Math.min(1, chargeDuration / maxChargeTime);
+        const baseSpeed = 5;
+        const maxSpeed = 15;
+        const speed = baseSpeed + (chargeProgress * (maxSpeed - baseSpeed));
+
+        createProjectile(player, room, player.angle, speed, player.weapon.type);
+        
+        player.grenadeChargeStartTime = 0;
         player.lastAttackTime = now;
         player.weapon.ammo--;
         if (player.weapon.ammo === 0) player.weapon = { ...WEAPONS.sword };

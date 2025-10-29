@@ -84,6 +84,35 @@ function draw() {
         ctx.lineWidth = 5;
         ctx.stroke();
     });
+    
+    // Draw explosions
+    gameState.explosions?.forEach(explosion => {
+        const age = now - explosion.startTime;
+        if (age > 500) return; // Explosion lasts 0.5 seconds
+        const progress = age / 500;
+        const alpha = 1 - progress;
+        const currentRadius = explosion.radius * (0.5 + progress * 0.5); // Expand from 50% to 100%
+        
+        // Orange explosion circle
+        ctx.fillStyle = `rgba(251, 146, 60, ${alpha * 0.6})`;
+        ctx.beginPath();
+        ctx.arc(explosion.x, explosion.y, currentRadius, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Yellow inner circle
+        ctx.fillStyle = `rgba(250, 204, 21, ${alpha * 0.8})`;
+        ctx.beginPath();
+        ctx.arc(explosion.x, explosion.y, currentRadius * 0.6, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Explosion ring
+        ctx.strokeStyle = `rgba(239, 68, 68, ${alpha})`;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(explosion.x, explosion.y, currentRadius, 0, Math.PI * 2);
+        ctx.stroke();
+    });
+    
     Object.values(gameState.players).forEach(p => {
         if(!p.isAlive) return;
         ctx.save(); ctx.translate(p.x, p.y);
@@ -116,6 +145,25 @@ function draw() {
                 ctx.fillStyle = `rgba(250, 204, 21, ${chargeAmount * 0.5})`;
                 ctx.beginPath(); ctx.arc(0, 0, KNIGHT_RADIUS + 5 + (chargeAmount * 5), 0, 2*Math.PI); ctx.fill();
         }
+        
+        // Draw grenade charge indicator
+        if (p.grenadeChargeStartTime > 0 && p.id === myId) {
+                const chargeAmount = Math.min(1, (now - p.grenadeChargeStartTime) / 1000);
+                ctx.fillStyle = `rgba(34, 197, 94, ${chargeAmount * 0.5})`;
+                ctx.beginPath(); ctx.arc(0, 0, KNIGHT_RADIUS + 5 + (chargeAmount * 5), 0, 2*Math.PI); ctx.fill();
+                
+                // Draw throw trajectory arc
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                const throwDistance = 100 + (chargeAmount * 200); // Visual only
+                ctx.lineTo(Math.cos(p.angle) * throwDistance, Math.sin(p.angle) * throwDistance);
+                ctx.strokeStyle = `rgba(34, 197, 94, ${chargeAmount * 0.3})`;
+                ctx.lineWidth = 2;
+                ctx.setLineDash([5, 5]);
+                ctx.stroke();
+                ctx.setLineDash([]);
+        }
+        
         ctx.fillStyle = p.color;
         ctx.beginPath(); ctx.arc(0, 0, KNIGHT_RADIUS, 0, Math.PI * 2); ctx.fill();
         ctx.rotate(p.angle);
@@ -140,21 +188,48 @@ function draw() {
     });
     
     gameState.projectiles?.forEach(p => {
-        const speedPercent = (p.speed - 10) / 15; // 0 for min speed, 1 for max
-        const length = 10 + (speedPercent * 5);   // Arrow length scales from 10 to 15
-        const lineWidth = 2 + (speedPercent * 2);   // Line width scales from 2 to 4
-        const angle = Math.atan2(p.vy, p.vx);
+        if (p.type === 'grenade') {
+            // Draw grenade as a green circle with fuse indicator
+            const fuseProgress = (now - p.createdTime) / p.fuseTime;
+            const radius = 8;
+            
+            ctx.fillStyle = WEAPONS_CONFIG.grenade.color;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Draw fuse progress ring
+            ctx.strokeStyle = fuseProgress > 0.7 ? '#ef4444' : '#fbbf24';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, radius + 3, 0, Math.PI * 2 * fuseProgress);
+            ctx.stroke();
+            
+            // Spark effect when close to exploding
+            if (fuseProgress > 0.7) {
+                ctx.fillStyle = `rgba(239, 68, 68, ${Math.random()})`;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        } else {
+            // Original arrow rendering for other projectiles
+            const speedPercent = (p.speed - 10) / 15; // 0 for min speed, 1 for max
+            const length = 10 + (speedPercent * 5);   // Arrow length scales from 10 to 15
+            const lineWidth = 2 + (speedPercent * 2);   // Line width scales from 2 to 4
+            const angle = Math.atan2(p.vy, p.vx);
 
-        // Calculate the tail position of the arrow
-        const tailX = p.x - length * Math.cos(angle);
-        const tailY = p.y - length * Math.sin(angle);
+            // Calculate the tail position of the arrow
+            const tailX = p.x - length * Math.cos(angle);
+            const tailY = p.y - length * Math.sin(angle);
 
-        ctx.beginPath();
-        ctx.moveTo(tailX, tailY);
-        ctx.lineTo(p.x, p.y); // p.x, p.y is the arrowhead
-        ctx.strokeStyle = '#ffdd00';
-        ctx.lineWidth = lineWidth;
-        ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(tailX, tailY);
+            ctx.lineTo(p.x, p.y); // p.x, p.y is the arrowhead
+            ctx.strokeStyle = '#ffdd00';
+            ctx.lineWidth = lineWidth;
+            ctx.stroke();
+        }
     });
 
     gameState.swordSlashes?.forEach(slash => {

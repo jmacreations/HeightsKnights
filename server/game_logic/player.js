@@ -11,7 +11,7 @@ function createNewPlayer(id, name, color) {
         isAlive: true, score: 0, weapon: { ...WEAPONS.sword }, lastAttackTime: 0,
         isLunging: false, lungeEndTime: 0, lastLungeTime: 0,
         hasShield: false, shieldActive: false, shieldEnergy: 0,
-        bowChargeStartTime: 0, laserChargeTime: 0, parryEndTime: 0,
+        bowChargeStartTime: 0, grenadeChargeStartTime: 0, laserChargeTime: 0, parryEndTime: 0,
     };
 }
 
