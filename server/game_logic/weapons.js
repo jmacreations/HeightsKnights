@@ -106,7 +106,7 @@ function updateLasers(room) {
                 // Check player collision
                 for (const target of Object.values(room.players)) {
                     if (target.id !== player.id && target.isAlive && getDistance(endPos, target) < KNIGHT_RADIUS) {
-                        handlePlayerHit(target);
+                        handlePlayerHit(target, player, room);
                         hit = true; break;
                     }
                 }
@@ -136,7 +136,7 @@ function updateSwordSlashes(room){
                  let angleToKnight = Math.atan2(player.y - owner.y, player.x - owner.x);
                  let diff = angleToKnight - slash.startAngle;
                  while (diff < -Math.PI) diff += 2 * Math.PI; while (diff > Math.PI) diff -= 2 * Math.PI;
-                 if(Math.abs(diff) < slash.weapon.arc/2) handlePlayerHit(player);
+                 if(Math.abs(diff) < slash.weapon.arc/2) handlePlayerHit(player, owner, room);
              }
          }
         for (const wall of room.walls) {

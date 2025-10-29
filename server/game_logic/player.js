@@ -12,11 +12,20 @@ function createNewPlayer(id, name, color) {
         isLunging: false, lungeEndTime: 0, lastLungeTime: 0,
         hasShield: false, shieldActive: false, shieldEnergy: 0,
         bowChargeStartTime: 0, grenadeChargeStartTime: 0, laserChargeTime: 0, parryEndTime: 0,
+        isInvulnerable: false, invulnerableUntil: 0, // Invulnerability window
+        respawnTime: 0, // Time when player should respawn
     };
 }
 
 function updateKnights(room, deltaTime) {
+    const now = Date.now();
+    
     Object.values(room.players).forEach(player => {
+        // Check for invulnerability expiration
+        if (player.isInvulnerable && now > player.invulnerableUntil) {
+            player.isInvulnerable = false;
+        }
+        
         if (!player.isAlive) return;
 
         // Shield energy drain
@@ -30,7 +39,6 @@ function updateKnights(room, deltaTime) {
         }
 
         // Lunge logic
-        const now = Date.now();
         if (player.isLunging && now > player.lungeEndTime) player.isLunging = false;
         
         // Movement and Collision
@@ -78,7 +86,12 @@ function handleLunge(player) {
     }
 }
 
-function handlePlayerHit(player) {
+function handlePlayerHit(player, attacker = null, room = null) {
+    // Check invulnerability
+    if (player.isInvulnerable) {
+        return false; // No damage dealt
+    }
+    
     if (player.shieldActive) {
         player.shieldActive = false;
         player.hasShield = false;
@@ -86,6 +99,16 @@ function handlePlayerHit(player) {
         return false;
     }
     player.isAlive = false;
+    
+    // Award kill to attacker in kill-based or time-based modes
+    if (attacker && room) {
+        const winType = room.matchSettings?.winType || 'LAST_KNIGHT_STANDING';
+        if (winType === 'KILL_BASED' || winType === 'TIME_BASED') {
+            attacker.score++;
+        }
+    }
+    
+    return true;
     return true;
 }
 

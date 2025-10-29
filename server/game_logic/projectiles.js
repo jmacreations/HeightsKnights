@@ -126,7 +126,8 @@ function updateProjectiles(room) {
                 if (Date.now() < player.parryEndTime && isProjectileInParryArc(p, player)) {
                     // Parry success
                 } else {
-                    handlePlayerHit(player);
+                    const attacker = room.players[p.ownerId];
+                    handlePlayerHit(player, attacker, room);
                 }
                 hitObject = true;
                 break;
@@ -149,9 +150,10 @@ function explodeGrenade(grenade, room) {
     });
     
     // Damage all players in radius
+    const attacker = room.players[grenade.ownerId];
     for (const player of Object.values(room.players)) {
-        if (player.isAlive && getDistance(grenade, player) < explosionRadius) {
-            handlePlayerHit(player);
+        if (player.isAlive && player.id !== grenade.ownerId && getDistance(grenade, player) < explosionRadius) {
+            handlePlayerHit(player, attacker, room);
         }
     }
     

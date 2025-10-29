@@ -46,6 +46,11 @@ export function initializeSocket() {
         }
     });
 
+    // Timer update for time-based mode
+    socket.on('timerUpdate', ({ remainingTime }) => {
+        window.gameRemainingTime = remainingTime;
+    });
+
     socket.on('gameState', (serverState) => {
         gameState = serverState;
     });

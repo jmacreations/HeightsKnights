@@ -166,6 +166,23 @@ function draw() {
         
         ctx.fillStyle = p.color;
         ctx.beginPath(); ctx.arc(0, 0, KNIGHT_RADIUS, 0, Math.PI * 2); ctx.fill();
+        
+        // Draw invulnerability shield
+        if (p.isInvulnerable) {
+            const pulseAmount = (Math.sin(now / 100) + 1) / 2; // Pulse effect
+            ctx.strokeStyle = `rgba(100, 200, 255, ${0.4 + pulseAmount * 0.4})`;
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(0, 0, KNIGHT_RADIUS + 8, 0, Math.PI * 2);
+            ctx.stroke();
+            
+            // Inner glow
+            ctx.fillStyle = `rgba(100, 200, 255, ${0.1 + pulseAmount * 0.1})`;
+            ctx.beginPath();
+            ctx.arc(0, 0, KNIGHT_RADIUS, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
         ctx.rotate(p.angle);
         ctx.fillStyle = WEAPONS_CONFIG[p.weapon.type]?.color || '#d1d5db';
         ctx.fillRect(KNIGHT_RADIUS - 5, -5, 20, 10);

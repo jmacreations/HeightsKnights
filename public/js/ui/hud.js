@@ -19,5 +19,14 @@ export function updateHud() {
         const shieldSeconds = (me.shieldEnergy / 1000).toFixed(1);
         hudText += ` | Shield: ${shieldSeconds}s`;
     }
+    
+    // Show timer for time-based mode
+    const winType = gameState.matchSettings?.winType;
+    if (winType === 'TIME_BASED' && window.gameRemainingTime !== undefined) {
+        const minutes = Math.floor(window.gameRemainingTime / 60000);
+        const seconds = Math.floor((window.gameRemainingTime % 60000) / 1000);
+        hudText += ` | Time: ${minutes}:${seconds.toString().padStart(2, '0')}`;
+    }
+    
     playerHud.textContent = hudText;
 }

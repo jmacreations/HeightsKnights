@@ -27,6 +27,33 @@ export const GAME_MODES = {
     }
 };
 
+export const WIN_TYPES = {
+    LAST_KNIGHT_STANDING: {
+        id: 'LAST_KNIGHT_STANDING',
+        name: 'Last Knight Standing',
+        description: 'One life per round. Last knight alive scores a point.',
+        requiresScoreTarget: true,
+        requiresTimeLimit: false,
+        autoRespawn: false
+    },
+    KILL_BASED: {
+        id: 'KILL_BASED',
+        name: 'Kill Based',
+        description: 'First to reach the kill target wins. Auto-respawn enabled.',
+        requiresScoreTarget: true,
+        requiresTimeLimit: false,
+        autoRespawn: true
+    },
+    TIME_BASED: {
+        id: 'TIME_BASED',
+        name: 'Time Based',
+        description: 'Most kills when time runs out wins. Auto-respawn enabled.',
+        requiresScoreTarget: false,
+        requiresTimeLimit: true,
+        autoRespawn: true
+    }
+};
+
 export const WEAPONS_CONFIG = {
     sword: { name: 'Sword', color: '#d1d5db' },
     bow: { name: 'Bow', color: '#facc15', ammo: 20 },
@@ -40,3 +67,5 @@ export const WEAPONS_CONFIG = {
 export const KNIGHT_RADIUS = 20;
 export const WALL_SIZE = 50;
 export const SHIELD_MAX_ENERGY = 5000;
+export const INVULNERABILITY_DURATION = 1500; // 1.5 seconds in milliseconds
+export const RESPAWN_DELAY = 2000; // 2 seconds delay before respawn

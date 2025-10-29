@@ -1,7 +1,7 @@
 // public/js/ui/uiManager.js
 import { getModeSelectHTML, addModeSelectListeners } from '../scenes/modeSelectScene.js';
 import { getMatchSettingsHTML, addMatchSettingsListeners } from '../scenes/matchSettingsScene.js';
-import { GAME_MODES } from '../config.js';
+import { GAME_MODES, WIN_TYPES } from '../config.js';
 
 export function showScreen(screenName) {
     const container = document.getElementById('game-container');
@@ -32,15 +32,33 @@ export function showScreen(screenName) {
         screenHtml = getMatchSettingsHTML(window.playerName, window.selectedGameMode);
     } else if (screenName === 'LOBBY') {
         const gameModeName = gameState.gameMode ? GAME_MODES[gameState.gameMode]?.name : 'Deathmatch';
+        const winType = gameState.matchSettings?.winType || 'LAST_KNIGHT_STANDING';
+        const winTypeName = WIN_TYPES[winType]?.name || 'Last Knight Standing';
         const scoreTarget = gameState.matchSettings?.scoreTarget || 5;
+        const timeLimit = gameState.matchSettings?.timeLimit || 5;
+        const enabledWeapons = gameState.matchSettings?.enabledWeapons || ['sword', 'bow', 'shotgun', 'laser', 'minigun', 'grenade'];
+        const weaponsList = enabledWeapons.map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(', ');
+        
+        // Build victory condition text
+        let victoryText = '';
+        if (winType === 'LAST_KNIGHT_STANDING') {
+            victoryText = `<p>Score to Win: <span class="text-green-400">${scoreTarget}</span> rounds</p>`;
+        } else if (winType === 'KILL_BASED') {
+            victoryText = `<p>Kill Target: <span class="text-green-400">${scoreTarget}</span> kills</p>`;
+        } else if (winType === 'TIME_BASED') {
+            victoryText = `<p>Time Limit: <span class="text-blue-400">${timeLimit}</span> minutes</p>`;
+        }
+        
         screenHtml = `
             <div id="LOBBY" class="ui-screen flex flex-col items-center p-8 bg-gray-800 rounded-lg shadow-xl w-[500px]">
                 <h2 class="text-3xl mb-2">LOBBY</h2>
                 <p class="text-2xl font-mono bg-gray-900 px-4 py-2 rounded-md mb-2">${roomCode}</p>
                 <div class="text-sm text-gray-400 mb-4 text-center flex items-center gap-3">
-                    <div>
+                    <div class="text-left">
                         <p>Mode: <span class="text-white">${gameModeName}</span></p>
-                        <p>Score to Win: <span id="lobby-score-target" class="text-green-400">${scoreTarget}</span></p>
+                        <p>Victory: <span class="text-white">${winTypeName}</span></p>
+                        ${victoryText}
+                        <p>Weapons: <span class="text-white text-xs">${weaponsList}</span></p>
                     </div>
                     <button id="edit-settings-btn" class="hidden bg-gray-700 hover:bg-gray-600 text-white px-3 py-1 rounded text-xs">⚙ Edit</button>
                 </div>

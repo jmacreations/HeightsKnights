@@ -29,7 +29,22 @@ io.on('connection', (socket) => {
         socket.join(roomCode);
         const room = createNewRoom(socket.id, roomCode, playerName, availableColors);
         room.gameMode = gameMode; // Store selected game mode
-        room.matchSettings = matchSettings || { scoreTarget: 5 }; // Store match settings with default
+        
+        // Set up match settings with defaults
+        room.matchSettings = {
+            winType: matchSettings?.winType || 'LAST_KNIGHT_STANDING',
+            scoreTarget: matchSettings?.scoreTarget || 5,
+            timeLimit: matchSettings?.timeLimit || 5, // in minutes
+            enabledWeapons: Array.isArray(matchSettings?.enabledWeapons) 
+                ? matchSettings.enabledWeapons.filter(w => typeof w === 'string')
+                : ['sword', 'bow', 'shotgun', 'laser', 'minigun', 'grenade']
+        };
+        
+        // Ensure sword is always included
+        if (!room.matchSettings.enabledWeapons.includes('sword')) {
+            room.matchSettings.enabledWeapons.push('sword');
+        }
+        
         gameRooms[roomCode] = room;
         socket.emit('roomCreated', { roomCode, roomState: room, myId: socket.id });
     });
@@ -101,10 +116,33 @@ io.on('connection', (socket) => {
             if (room.hostId !== socket.id) throw new Error('Only the host can change settings');
             if (room.state !== 'LOBBY') throw new Error('Settings can only be changed in the lobby');
 
-            const next = { ...(room.matchSettings || { scoreTarget: 5 }), ...(settings || {}) };
-            // Sanitize known fields
+            const next = { ...(room.matchSettings || { winType: 'LAST_KNIGHT_STANDING', scoreTarget: 5, timeLimit: 5 }), ...(settings || {}) };
+            
+            // Sanitize winType
+            const validWinTypes = ['LAST_KNIGHT_STANDING', 'KILL_BASED', 'TIME_BASED'];
+            if (!validWinTypes.includes(next.winType)) {
+                next.winType = 'LAST_KNIGHT_STANDING';
+            }
+            
+            // Sanitize scoreTarget
             if (typeof next.scoreTarget !== 'number') next.scoreTarget = Number(next.scoreTarget) || 5;
-            next.scoreTarget = Math.max(1, Math.min(10, next.scoreTarget));
+            next.scoreTarget = Math.max(1, Math.min(20, next.scoreTarget));
+
+            // Sanitize timeLimit (in minutes)
+            if (typeof next.timeLimit !== 'number') next.timeLimit = Number(next.timeLimit) || 5;
+            next.timeLimit = Math.max(1, Math.min(15, next.timeLimit));
+
+            // Sanitize enabledWeapons: ensure it's an array and includes 'sword'
+            if (Array.isArray(next.enabledWeapons)) {
+                // Validate each weapon is a string and ensure sword is always included
+                next.enabledWeapons = next.enabledWeapons.filter(w => typeof w === 'string' && w.length > 0);
+                if (!next.enabledWeapons.includes('sword')) {
+                    next.enabledWeapons.push('sword');
+                }
+            } else {
+                // Default to all weapons if not provided
+                next.enabledWeapons = ['sword', 'bow', 'shotgun', 'laser', 'minigun', 'grenade'];
+            }
 
             room.matchSettings = next;
             // Broadcast updated settings and lobby state for UI refresh
