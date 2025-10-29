@@ -22,12 +22,14 @@ io.on('connection', (socket) => {
         // Support both old format (string) and new format (object)
         const playerName = typeof data === 'string' ? data : data.playerName;
         const gameMode = typeof data === 'object' ? data.gameMode : 'deathmatch';
+        const matchSettings = typeof data === 'object' ? data.matchSettings : null;
         
         let roomCode;
         do { roomCode = Math.random().toString(36).substring(2, 6).toUpperCase(); } while (gameRooms[roomCode]);
         socket.join(roomCode);
         const room = createNewRoom(socket.id, roomCode, playerName, availableColors);
         room.gameMode = gameMode; // Store selected game mode
+        room.matchSettings = matchSettings || { scoreTarget: 5 }; // Store match settings with default
         gameRooms[roomCode] = room;
         socket.emit('roomCreated', { roomCode, roomState: room, myId: socket.id });
     });
@@ -88,6 +90,29 @@ io.on('connection', (socket) => {
             room.state = 'LOBBY';
             // Send everyone back to the lobby screen
             io.to(roomCode).emit('returnToLobby', room);
+        }
+    });
+
+    // Host-only: update match settings while in lobby
+    socket.on('updateMatchSettings', ({ roomCode, settings }, ack) => {
+        try {
+            const room = gameRooms[roomCode];
+            if (!room) throw new Error('Room not found');
+            if (room.hostId !== socket.id) throw new Error('Only the host can change settings');
+            if (room.state !== 'LOBBY') throw new Error('Settings can only be changed in the lobby');
+
+            const next = { ...(room.matchSettings || { scoreTarget: 5 }), ...(settings || {}) };
+            // Sanitize known fields
+            if (typeof next.scoreTarget !== 'number') next.scoreTarget = Number(next.scoreTarget) || 5;
+            next.scoreTarget = Math.max(1, Math.min(10, next.scoreTarget));
+
+            room.matchSettings = next;
+            // Broadcast updated settings and lobby state for UI refresh
+            io.to(roomCode).emit('matchSettingsUpdated', next);
+            io.to(roomCode).emit('updateLobby', room);
+            ack && ack({ ok: true });
+        } catch (err) {
+            ack && ack({ ok: false, error: err.message });
         }
     });
 

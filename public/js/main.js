@@ -11,6 +11,7 @@ window.gameState = {};
 window.uiState = 'MENU';
 window.playerName = '';
 window.selectedGameMode = null;
+window.matchSettings = null;
 
 function main() {
     initializeSocket();

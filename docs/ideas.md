@@ -8,11 +8,12 @@
     - [ ] non-destructable walls
     - [ ] respawning destructable walls (re-appears after 20s or so if there is not a player in the space)
 - [ ] Custom match settings
+  - These would be accessible via a gear icon when in the lobby of a game mode for the host only. For all players, beside the lobby screen would show the game type and the settings for the game type (Win Type, Score Target, Individual or Team, Weapon List, Friendly Fire on/Off if a team match)
   - Win type
     - [ ] Time based - Player with the most points when the timer runs out. Infinite lives, auto respawn.
     - [ ] Kill based (first to x kills wins)
     - [x] Last knight standing each round you get 1 life and the last knight to remian gets a point. First to the set points wins.
-  - [ ] Score target (time or kills)
+  - [ ] Score target (time or kills) Currently defaulted to 5 for Last night standing.
   - [ ] Play Type (Individual or Team)
   - [ ] Weapon selections (disable certain weapons)
   - [ ] Friendly Fire ON/OFF (team based only)

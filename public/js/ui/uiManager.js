@@ -1,5 +1,6 @@
 // public/js/ui/uiManager.js
 import { getModeSelectHTML, addModeSelectListeners } from '../scenes/modeSelectScene.js';
+import { getMatchSettingsHTML, addMatchSettingsListeners } from '../scenes/matchSettingsScene.js';
 import { GAME_MODES } from '../config.js';
 
 export function showScreen(screenName) {
@@ -27,13 +28,22 @@ export function showScreen(screenName) {
             </div>`;
     } else if (screenName === 'MODE_SELECT') {
         screenHtml = getModeSelectHTML(window.playerName);
+    } else if (screenName === 'MATCH_SETTINGS') {
+        screenHtml = getMatchSettingsHTML(window.playerName, window.selectedGameMode);
     } else if (screenName === 'LOBBY') {
         const gameModeName = gameState.gameMode ? GAME_MODES[gameState.gameMode]?.name : 'Deathmatch';
+        const scoreTarget = gameState.matchSettings?.scoreTarget || 5;
         screenHtml = `
             <div id="LOBBY" class="ui-screen flex flex-col items-center p-8 bg-gray-800 rounded-lg shadow-xl w-[500px]">
                 <h2 class="text-3xl mb-2">LOBBY</h2>
                 <p class="text-2xl font-mono bg-gray-900 px-4 py-2 rounded-md mb-2">${roomCode}</p>
-                <p class="text-sm text-gray-400 mb-6">Mode: ${gameModeName}</p>
+                <div class="text-sm text-gray-400 mb-4 text-center flex items-center gap-3">
+                    <div>
+                        <p>Mode: <span class="text-white">${gameModeName}</span></p>
+                        <p>Score to Win: <span id="lobby-score-target" class="text-green-400">${scoreTarget}</span></p>
+                    </div>
+                    <button id="edit-settings-btn" class="hidden bg-gray-700 hover:bg-gray-600 text-white px-3 py-1 rounded text-xs">⚙ Edit</button>
+                </div>
                 <div id="player-list" class="flex flex-col items-center w-full gap-2 min-h-[100px]"></div>
                 <button id="start-game-btn" class="btn btn-green w-full mt-6 hidden">Start Game</button>
             </div>`;
@@ -65,10 +75,21 @@ function addEventListeners(screenName) {
         };
     } else if (screenName === 'MODE_SELECT') {
         addModeSelectListeners();
+    } else if (screenName === 'MATCH_SETTINGS') {
+        addMatchSettingsListeners();
     } else if (screenName === 'LOBBY') {
         const startGameBtn = document.getElementById('start-game-btn');
         if (startGameBtn) {
             startGameBtn.onclick = () => socket.emit('startGame', roomCode);
+        }
+        // Host-only: show Edit Settings
+        const editBtn = document.getElementById('edit-settings-btn');
+        if (editBtn && myId === gameState.hostId) {
+            editBtn.classList.remove('hidden');
+            editBtn.onclick = () => {
+                window.settingsContext = 'lobby';
+                showScreen('MATCH_SETTINGS');
+            };
         }
     }
 }

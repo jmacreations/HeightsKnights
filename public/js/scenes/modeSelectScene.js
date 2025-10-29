@@ -53,9 +53,9 @@ export function addModeSelectListeners() {
             modeCards.forEach(c => c.classList.remove('border-green-500'));
             card.classList.add('border-green-500');
             
-            // Create room with selected mode
-            const playerName = window.playerName;
-            socket.emit('createRoom', { playerName, gameMode: modeId });
+            // Navigate to match settings (pre-room context)
+            window.settingsContext = 'preRoom';
+            showScreen('MATCH_SETTINGS');
         });
     });
     

@@ -112,7 +112,10 @@ function gameLoop(room, deltaTime) {
             const winner = livingKnights[0];
             winner.score++;
             room.roundWinner = winner;
-            if (winner.score >= SCORE_TO_WIN) {
+            
+            // Use custom score target from match settings
+            const scoreTarget = room.matchSettings?.scoreTarget || SCORE_TO_WIN;
+            if (winner.score >= scoreTarget) {
                 room.state = 'MATCH_OVER';
                 io.to(room.code).emit('matchOver', { winnerId: winner.id, players: room.players, hostId: room.hostId });
             }

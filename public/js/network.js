@@ -36,6 +36,16 @@ export function initializeSocket() {
         updateLobbyUI();
     });
 
+    // Settings updated while in lobby
+    socket.on('matchSettingsUpdated', (nextSettings) => {
+        gameState.matchSettings = nextSettings;
+        if (uiState === 'LOBBY') {
+            // Re-render lobby to reflect new settings
+            showScreen('LOBBY');
+            updateLobbyUI();
+        }
+    });
+
     socket.on('gameState', (serverState) => {
         gameState = serverState;
     });
