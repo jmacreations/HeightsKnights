@@ -19,7 +19,7 @@ function main() {
     
     socket.on('gameStarting', () => {
         showScreen('GAME');
-        startGame(); // Starts the game loop
+        startGame();
     });
 }
 

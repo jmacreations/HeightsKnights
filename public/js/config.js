@@ -13,9 +13,9 @@ export const GAME_MODES = {
         id: 'teamBattle',
         name: 'Team Battle',
         description: 'Fight in teams! Coordinate with your allies to defeat the enemy.',
-        minPlayers: 4,
+        minPlayers: 2,
         maxPlayers: 8,
-        available: false // Will be available in future update
+        available: true // Now available!
     },
     captureTheFlag: {
         id: 'captureTheFlag',
@@ -67,5 +67,5 @@ export const WEAPONS_CONFIG = {
 export const KNIGHT_RADIUS = 20;
 export const WALL_SIZE = 50;
 export const SHIELD_MAX_ENERGY = 5000;
-export const INVULNERABILITY_DURATION = 1500; // 1.5 seconds in milliseconds
-export const RESPAWN_DELAY = 2000; // 2 seconds delay before respawn
+export const INVULNERABILITY_DURATION = 1500;
+export const RESPAWN_DELAY = 2000;

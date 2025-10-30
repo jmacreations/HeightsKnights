@@ -14,6 +14,9 @@ export function getMatchSettingsHTML(playerName, gameMode) {
     const currentEnabledWeapons = (inLobby && window.gameState?.matchSettings?.enabledWeapons) 
         ? window.gameState.matchSettings.enabledWeapons 
         : Object.keys(WEAPONS_CONFIG).filter(w => w !== 'shield');
+    const currentFriendlyFire = (inLobby && window.gameState?.matchSettings?.friendlyFire !== undefined)
+        ? window.gameState.matchSettings.friendlyFire
+        : false;
     
     // Generate win type radio buttons
     const winTypeOptions = Object.entries(WIN_TYPES).map(([key, config]) => `
@@ -132,6 +135,25 @@ export function getMatchSettingsHTML(playerName, gameMode) {
                     </div>
                 </div>
                 
+                <!-- Friendly Fire Setting (Team Mode Only) -->
+                ${gameMode === 'teamBattle' ? `
+                <div class="bg-gray-700 p-4 rounded-lg">
+                    <label class="block text-lg font-bold mb-3">Team Settings</label>
+                    <label class="flex items-center gap-3 p-2 rounded hover:bg-gray-600 cursor-pointer">
+                        <input 
+                            type="checkbox" 
+                            id="friendly-fire-checkbox"
+                            class="w-5 h-5"
+                            ${currentFriendlyFire ? 'checked' : ''}
+                        >
+                        <div class="flex-1">
+                            <span class="font-bold">Friendly Fire</span>
+                            <div class="text-xs text-gray-400">Allow teammates to damage each other</div>
+                        </div>
+                    </label>
+                </div>
+                ` : ''}
+                
                 <button id="save-settings-btn" class="btn btn-green w-full mt-6 text-xl py-3">
                     ${inLobby ? 'Save Settings' : 'Create Room'}
                 </button>
@@ -149,6 +171,9 @@ export function addMatchSettingsListeners() {
     let currentScore = 5;
     let currentTimeLimit = 5; // minutes
     let currentMapId = (inLobby && window.gameState?.matchSettings?.mapId) ? window.gameState.matchSettings.mapId : 'classic';
+    let currentFriendlyFire = (inLobby && window.gameState?.matchSettings?.friendlyFire !== undefined) 
+        ? window.gameState.matchSettings.friendlyFire 
+        : false;
     
     if (inLobby && window.gameState?.matchSettings) {
         currentScore = Number(window.gameState.matchSettings.scoreTarget) || 5;
@@ -303,7 +328,8 @@ export function addMatchSettingsListeners() {
             scoreTarget: currentScore,
             timeLimit: currentTimeLimit,
             mapId: currentMapId,
-            enabledWeapons: enabledWeapons
+            enabledWeapons: enabledWeapons,
+            friendlyFire: gameMode === 'teamBattle' ? document.getElementById('friendly-fire-checkbox')?.checked || false : false
         };
         
         if (window.settingsContext === 'lobby' && window.roomCode) {

@@ -42,3 +42,61 @@ MENU SETTINGS
 - [x] Leave game option for all players should ask to confirm "Are you sure?"
 - [x] Pause state should show to players. Dim the screen with a message "PAUSED"
 - [x] Host pausing the game should also pause the round start countdown. This will prevent the round from starting while the host is in the menu.
+
+
+# TEAM BATTLE GAME MODE
+1. Team Assignment & Management
+- Team selection in lobby (auto-balance, manual assignment by host)
+- Display team colors/names in UI
+- Minimum/maximum players per team enforcement
+2. Game State & Scoring
+- Track team scores (kills, objectives, etc.)
+- Attribute kills and points to teams
+- Team-based win conditions (first to X points, most points at end, etc.)
+3. UI/UX Updates
+- Show team scores and player lists in-game HUD
+- Indicate teammates visually (color, icons, etc.)
+- Friendly fire indicator and toggle (host setting)
+4. Spawn & Respawn Logic
+- Team-based spawn points
+- Prevent spawning near enemy players if possible
+5. Networking & Sync
+- Sync team assignments and scores across all clients
+- Handle reconnects and late joins with correct team assignment
+6. Game Logic Changes
+- Prevent damage to teammates if friendly fire is off
+- Adjust powerups/weapons if needed for team play
+7. Edge Cases & Balancing
+- Handle unbalanced teams (auto-balance, handicaps, or warnings)
+- Prevent match start if teams are too uneven
+8. Testing & QA
+Test with various player counts and disconnect/reconnect scenarios
+Ensure UI and scoring work correctly for teams
+Optional Enhancements:
+
+Team chat or communication tools
+Team-based achievements or stats
+
+---
+## TASK CHECKLIST
+
+### Team Battle Mode
+- [ ] Team selection in lobby (auto-balance/manual by host)
+- [ ] Display team colors/names in UI (Red/Blue)
+- [ ] Enforce min/max players per team (Host setting)
+- [ ] Track team scores and attribute points/kills
+- [ ] Implement team-based win conditions
+- [ ] Show team scores in HUD
+- [ ] Indicate teammates visually
+- [ ] Add Friendly Fire toggle and logic (Host only game settings)
+- [ ] Team-based spawn points and spawn logic
+- [ ] Prevent spawning near enemies
+- [ ] Sync team assignments and scores across clients
+- [ ] Prevent damage to teammates if friendly fire is off
+- [ ] Adjust powerups/weapons for team play
+- [ ] Handle unbalanced teams (auto-balance, handicaps, warnings)
+  - [ ] Calculate team size difference
+  - [ ] Apply speed multiplier to smaller team: `speedMultiplier = 1 + (teamSizeDifference * 0.10)`
+  - [ ] Apply respawn delay reduction to smaller team: `respawnMultiplier = 1 - (teamSizeDifference * 0.10)`
+  - [ ] Cap maximum bonus (e.g., 30-40% to prevent extreme cases)
+  - [ ] Display speed/respawn bonuses in UI for transparency

@@ -5,9 +5,9 @@ const {
 } = require('../utils/constants');
 const { isCollidingWithWall, getDistance } = require('../utils/helpers');
 
-function createNewPlayer(id, name, color) {
+function createNewPlayer(id, name, color, teamId = null) {
     return {
-        id, name, color, x: 0, y: 0, angle: 0, vx: 0, vy: 0,
+        id, name, color, teamId, x: 0, y: 0, angle: 0, vx: 0, vy: 0,
         isAlive: true, score: 0, weapon: { ...WEAPONS.sword }, lastAttackTime: 0,
         isLunging: false, lungeEndTime: 0, lastLungeTime: 0,
         hasShield: false, shieldActive: false, shieldEnergy: 0,
@@ -19,6 +19,24 @@ function createNewPlayer(id, name, color) {
 
 function updateKnights(room, deltaTime) {
     const now = Date.now();
+    
+    // Calculate team balancing bonuses for team mode
+    let teamSizeDiff = 0;
+    let smallerTeamId = null;
+    if (room.matchSettings?.playType === 'team') {
+        const teamSizes = {};
+        room.teams.forEach(team => {
+            teamSizes[team.id] = Object.values(room.players).filter(p => p.teamId === team.id).length;
+        });
+        
+        const teamIds = Object.keys(teamSizes);
+        if (teamIds.length === 2) {
+            const size1 = teamSizes[teamIds[0]];
+            const size2 = teamSizes[teamIds[1]];
+            teamSizeDiff = Math.abs(size1 - size2);
+            smallerTeamId = size1 < size2 ? teamIds[0] : teamIds[1];
+        }
+    }
     
     Object.values(room.players).forEach(player => {
         // Check for invulnerability expiration
@@ -44,6 +62,12 @@ function updateKnights(room, deltaTime) {
         // Movement and Collision
         let speedMultiplier = player.isLunging ? LUNGE_SPEED_MULTIPLIER : 1;
         if (player.weapon.type === 'minigun') speedMultiplier *= WEAPONS.minigun.speedPenalty;
+        
+        // Apply team balancing speed bonus
+        if (room.matchSettings?.playType === 'team' && player.teamId === smallerTeamId) {
+            const speedBonus = Math.min(1.0, teamSizeDiff * 0.15); // Increased cap to 100%, higher multiplier
+            speedMultiplier *= (1 + speedBonus);
+        }
         
         const moveX = player.vx * KNIGHT_SPEED * speedMultiplier;
         const moveY = player.vy * KNIGHT_SPEED * speedMultiplier;
@@ -94,6 +118,13 @@ function handlePlayerHit(player, attacker = null, room = null) {
         return false; // No damage dealt
     }
     
+    // Check friendly fire
+    if (room && room.matchSettings?.playType === 'team' && 
+        attacker && attacker.teamId && player.teamId === attacker.teamId && 
+        !room.matchSettings.friendlyFire) {
+        return false; // No damage to teammates when friendly fire is off
+    }
+    
     if (player.shieldActive) {
         player.shieldActive = false;
         player.hasShield = false;
@@ -107,10 +138,17 @@ function handlePlayerHit(player, attacker = null, room = null) {
         const winType = room.matchSettings?.winType || 'LAST_KNIGHT_STANDING';
         if (winType === 'KILL_BASED' || winType === 'TIME_BASED') {
             attacker.score++;
+            
+            // Award team points if in team mode
+            if (room.matchSettings?.playType === 'team' && attacker.teamId) {
+                const team = room.teams.find(t => t.id === attacker.teamId);
+                if (team) {
+                    team.score++;
+                }
+            }
         }
     }
     
-    return true;
     return true;
 }
 

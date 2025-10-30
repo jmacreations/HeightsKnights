@@ -194,6 +194,27 @@ function draw() {
         ctx.fillStyle = p.color;
         ctx.beginPath(); ctx.arc(0, 0, KNIGHT_RADIUS, 0, Math.PI * 2); ctx.fill();
         
+        // Draw team indicator for teammates
+        const isTeamMode = gameState.matchSettings?.playType === 'team';
+        if (isTeamMode && p.teamId && p.id !== myId) {
+            const myTeamId = gameState.players[myId]?.teamId;
+            if (myTeamId && p.teamId === myTeamId) {
+                // Teammate - draw green border
+                ctx.strokeStyle = '#22c55e';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.arc(0, 0, KNIGHT_RADIUS + 3, 0, Math.PI * 2);
+                ctx.stroke();
+            } else {
+                // Enemy - draw red border
+                ctx.strokeStyle = '#ef4444';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(0, 0, KNIGHT_RADIUS + 2, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+        }
+        
         // Draw invulnerability shield
         if (p.isInvulnerable) {
             const pulseAmount = (Math.sin(now / 100) + 1) / 2; // Pulse effect
@@ -289,7 +310,8 @@ function draw() {
             ctx.stroke();
             ctx.restore();
     });
-    updateScoreboard(gameState.players);
+    const isTeamMode = gameState.matchSettings?.playType === 'team';
+    updateScoreboard(gameState.players, gameState.teams, isTeamMode, gameState.matchSettings);
     updateHud();
 }
 

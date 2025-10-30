@@ -7,6 +7,7 @@ const { gameLoop, createNewRoom, resetRound } = require('./game_logic/game');
 const { getMaps, getMapById } = require('./utils/maps');
 const { createNewPlayer, handleLunge } = require('./game_logic/player');
 const { handleAttackStart, handleAttackEnd } = require('./game_logic/weapons');
+const { GAME_MODES } = require('../public/js/config.js');
 
 const app = express();
 const server = http.createServer(app);
@@ -17,6 +18,25 @@ app.use(express.static('public'));
 const gameRooms = {};
 const availableColors = ['#4ade80', '#f87171', '#60aeff', '#fbbf24', '#a78bfa', '#f472b6', '#6134d3ff', '#9ca3af'];
 
+// Helper function to assign team to a player
+function assignTeamToPlayer(player, room, playerName, roomCode) {
+    if (room.matchSettings?.playType !== 'team') return;
+    
+    // Host gets blue team by default
+    if (player.id === room.hostId) {
+        player.teamId = 'blue';
+    } else {
+        // Auto-balance other players
+        const teamSizes = {};
+        room.teams.forEach(team => {
+            teamSizes[team.id] = Object.values(room.players).filter(p => p.teamId === team.id).length;
+        });
+        
+        const redSize = teamSizes.red || 0;
+        const blueSize = teamSizes.blue || 0;
+        player.teamId = redSize <= blueSize ? 'red' : 'blue';
+    }
+}
 
 io.on('connection', (socket) => {
     // Provide available maps to clients
@@ -50,21 +70,29 @@ io.on('connection', (socket) => {
         const room = createNewRoom(socket.id, roomCode, playerName, availableColors);
         room.gameMode = gameMode; // Store selected game mode
         
+        console.log(`[ROOM CREATED] ${playerName} (${socket.id}) created room ${roomCode} with mode: ${gameMode}`);
+        
         // Set up match settings with defaults
         room.matchSettings = {
+            playType: gameMode === 'teamBattle' ? 'team' : 'individual',
             winType: matchSettings?.winType || 'LAST_KNIGHT_STANDING',
             scoreTarget: matchSettings?.scoreTarget || 5,
             timeLimit: matchSettings?.timeLimit || 5, // in minutes
             mapId: (matchSettings?.mapId && getMapById(matchSettings.mapId)?.id) || 'classic',
             enabledWeapons: Array.isArray(matchSettings?.enabledWeapons) 
                 ? matchSettings.enabledWeapons.filter(w => typeof w === 'string')
-                : ['sword', 'bow', 'shotgun', 'laser', 'minigun', 'grenade']
+                : ['sword', 'bow', 'shotgun', 'laser', 'minigun', 'grenade'],
+            friendlyFire: matchSettings?.friendlyFire || false
         };
         
         // Ensure sword is always included
         if (!room.matchSettings.enabledWeapons.includes('sword')) {
             room.matchSettings.enabledWeapons.push('sword');
         }
+        
+        // Assign host to team if in team mode
+        const hostPlayer = room.players[socket.id];
+        assignTeamToPlayer(hostPlayer, room, playerName, roomCode);
         
         gameRooms[roomCode] = room;
         socket.emit('roomCreated', { roomCode, roomState: room, myId: socket.id });
@@ -82,6 +110,10 @@ io.on('connection', (socket) => {
         
         socket.join(roomCode);
         const player = createNewPlayer(socket.id, playerName, availableColors[playerCount]);
+        
+        // Auto-assign to team if in team mode
+        assignTeamToPlayer(player, room, playerName, roomCode);
+        
         room.players[socket.id] = player;
         socket.emit('joinSuccess', { roomCode, roomState: room, myId: socket.id });
         socket.to(roomCode).emit('updateLobby', room);
@@ -90,10 +122,24 @@ io.on('connection', (socket) => {
     socket.on('startGame', (roomCode) => {
         const room = gameRooms[roomCode];
         if (room && room.hostId === socket.id && room.state === 'LOBBY') {
-            if (Object.keys(room.players).length < 2) {
-                socket.emit('startError', 'Need at least 2 players to start.');
+            const playerCount = Object.keys(room.players).length;
+            const gameModeConfig = GAME_MODES[room.gameMode] || GAME_MODES.deathmatch;
+            
+            if (playerCount < gameModeConfig.minPlayers) {
+                socket.emit('startError', `Need at least ${gameModeConfig.minPlayers} players to start.`);
                 return;
             }
+            
+            // Check team balance for team mode
+            if (room.matchSettings?.playType === 'team') {
+                if (playerCount < gameModeConfig.minPlayers) {
+                    socket.emit('startError', `Need at least ${gameModeConfig.minPlayers} players for team mode.`);
+                    return;
+                }
+                
+                // Allow unbalanced teams - balancing bonuses will help smaller teams
+            }
+            
             io.to(roomCode).emit('gameStarting');
             resetRound(room);
         }
@@ -115,6 +161,18 @@ io.on('connection', (socket) => {
         }
     });
 
+    // Host-only: assign player to team
+    socket.on('assignTeam', (data) => {
+        const room = gameRooms[data.roomCode];
+        if (!room || room.hostId !== socket.id) return;
+        
+        const player = room.players[data.playerId];
+        if (player) {
+            player.teamId = data.teamId;
+            io.to(data.roomCode).emit('updateLobby', room);
+        }
+    });
+
     socket.on('playAgain', (roomCode, ack) => {
         const room = gameRooms[roomCode];
         if (room && room.hostId === socket.id) {
@@ -123,6 +181,12 @@ io.on('connection', (socket) => {
                 p.score = 0;
                 p.isAlive = true;
             });
+            // Reset team scores for team modes
+            if (room.teams) {
+                room.teams.forEach(team => {
+                    team.score = 0;
+                });
+            }
             room.state = 'LOBBY';
             // Kick off a new round
             io.to(roomCode).emit('gameStarting');
@@ -146,6 +210,12 @@ io.on('connection', (socket) => {
             Object.values(room.players).forEach(p => {
                 p.score = 0;
             });
+            // Reset team scores for team modes
+            if (room.teams) {
+                room.teams.forEach(team => {
+                    team.score = 0;
+                });
+            }
             room.walls = [];
             room.projectiles = [];
             room.powerups = [];
@@ -186,6 +256,12 @@ io.on('connection', (socket) => {
                 Object.values(room.players).forEach(p => {
                     p.score = 0;
                 });
+                // Reset team scores for team modes
+                if (room.teams) {
+                    room.teams.forEach(team => {
+                        team.score = 0;
+                    });
+                }
                 room.state = 'LOBBY';
                 io.to(roomCode).emit('returnToLobby', room);
             }

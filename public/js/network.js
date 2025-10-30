@@ -60,13 +60,27 @@ export function initializeSocket() {
     });
 
     socket.on('roundOver', (data) => {
-        updateScoreboard(data.players);
-        showMessage(data.winnerId ? `${data.players[data.winnerId]?.name} wins!` : "DRAW!", 2000);
+        const isTeamMode = gameState.matchSettings?.playType === 'team';
+        updateScoreboard(data.players, gameState.teams, isTeamMode, gameState.matchSettings);
+        if (isTeamMode && data.winnerId && !data.isDraw) {
+            const team = gameState.teams?.find(t => t.id === data.winnerId);
+            showMessage(team ? `${team.name} wins the round!` : "Round Over!", 2000);
+        } else if (data.isDraw) {
+            showMessage("Round Draw!", 2000);
+        } else {
+            showMessage(data.winnerId ? `${data.players[data.winnerId]?.name} wins the round!` : "Round Over!", 2000);
+        }
     });
 
     socket.on('matchOver', (data) => {
-        updateScoreboard(data.players);
-        showMessage(`${data.players[data.winnerId]?.name} IS VICTORIOUS!`, Infinity, true, data);
+        const isTeamMode = gameState.matchSettings?.playType === 'team';
+        updateScoreboard(data.players, gameState.teams, isTeamMode, gameState.matchSettings);
+        if (isTeamMode && data.winnerId) {
+            const team = gameState.teams?.find(t => t.id === data.winnerId);
+            showMessage(team ? `${team.name} IS VICTORIOUS!` : "MATCH OVER!", Infinity, true, data);
+        } else {
+            showMessage(`${data.players[data.winnerId]?.name} IS VICTORIOUS!`, Infinity, true, data);
+        }
     });
 
     // Pause/Resume handling
