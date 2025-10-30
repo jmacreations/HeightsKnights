@@ -9,7 +9,7 @@
 
 ## Overview
 
-**Deathmatch** is the core competitive game mode in Heights Knights. It's a free-for-all battle where players (knights) fight to be the last one standing in each round. The first player to win 5 rounds wins the match.
+**Deathmatch** is the core competitive game mode in SlashDash. It's a free-for-all battle where players (knights) fight to be the last one standing in each round. The first player to win 5 rounds wins the match.
 
 ### Core Concept
 - **Every knight for themselves** - No teams, no allies

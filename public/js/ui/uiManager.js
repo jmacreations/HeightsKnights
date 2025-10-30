@@ -19,7 +19,7 @@ export function showScreen(screenName) {
     if (screenName === 'MENU') {
         screenHtml = `
             <div id="MENU" class="ui-screen flex flex-col items-center justify-center p-8 bg-gray-800 rounded-lg shadow-xl">
-                <h1 class="text-5xl mb-8">Heights Knights</h1>
+                <h1 class="text-5xl mb-8">SlashDash<span class="text-3xl ml-2">/-</span></h1>
                 <div class="w-full max-w-sm">
                     <input id="name-input" type="text" placeholder="Enter Your Name" class="input-field w-full mb-4" maxlength="12">
                     <button id="create-room-btn" class="btn btn-green w-full mb-4">Create Room</button>

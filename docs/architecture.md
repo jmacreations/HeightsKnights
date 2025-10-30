@@ -1,10 +1,10 @@
-# Heights Knights - Architecture Documentation
+# SlashDash - Architecture Documentation
 
 This file summarises the server and client structure of this project.
 
 ## High-Level Overview
 
-**Heights Knights** is a multiplayer browser-based action game built with a client-server architecture using Node.js, Express, Socket.IO, and HTML5 Canvas. The game features real-time combat between players (knights) in a 2D arena with various weapons and power-ups.
+**SlashDash** is a multiplayer browser-based action game built with a client-server architecture using Node.js, Express, Socket.IO, and HTML5 Canvas. The game features real-time combat between players (knights) in a 2D arena with various weapons and power-ups.
 
 ### Core Architecture Pattern
 - **Client-Side**: Handles rendering, input capture, and UI state management

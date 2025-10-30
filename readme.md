@@ -1,8 +1,8 @@
-## Heights Knights
+## SlashDash (/-)
 A fast-paced, real-time multiplayer 2D arena shooter built with Node.js, Express, and Socket.IO.
 
 ### About The Game
-Heights Knights is a top-down, last-knight-standing arena game where players battle it out to be the final survivor. Players control a knight in a destructible arena, collecting powerful weapon and shield power-ups to gain an edge over their opponents. The player who is the last one alive at the end of a round scores a point, and the first to reach the score limit wins the match!
+SlashDash is a top-down, last-knight-standing arena game where players battle it out to be the final survivor. Players control a knight in a destructible arena, collecting powerful weapon and shield power-ups to gain an edge over their opponents. The player who is the last one alive at the end of a round scores a point, and the first to reach the score limit wins the match!
 
 ### Core Features
 Real-time Multiplayer: Create or join game rooms that support up to 8 players.
@@ -31,7 +31,7 @@ Node.js and npm installed on your machine. You can download them from nodejs.org
 **Installation & Running**
 Clone the repo
 
-`git clone https://github.com/jmacreations/HeightsKnights`
+`git clone https://github.com/jmacreations/SlashDash`
 
 Navigate to the project directory
 
