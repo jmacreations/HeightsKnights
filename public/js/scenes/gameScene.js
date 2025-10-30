@@ -2,6 +2,7 @@
 import { updateScoreboard } from '../ui/scoreboard.js';
 import { updateHud } from '../ui/hud.js';
 import { WEAPONS_CONFIG, KNIGHT_RADIUS, WALL_SIZE, SHIELD_MAX_ENERGY } from '../config.js';
+import { gamepadManager } from '../input/gamepadManager.js';
 
 let ctx, gameCanvas;
 const keys = {};
@@ -36,28 +37,60 @@ function handleInput() {
     const me = gameState.players?.[myId];
     if (!me || !me.isAlive) return;
 
+    // Poll gamepad input
+    const gamepadInput = gamepadManager.poll();
+    
+    // Keyboard movement
     let vx = 0; let vy = 0;
     if (keys['KeyW'] || keys['ArrowUp']) vy = -1;
     if (keys['KeyS'] || keys['ArrowDown']) vy = 1;
     if (keys['KeyA'] || keys['ArrowLeft']) vx = -1;
     if (keys['KeyD'] || keys['ArrowRight']) vx = 1;
     
+    // Gamepad movement (left stick) - overrides keyboard if gamepad connected
+    if (gamepadInput) {
+        if (Math.abs(gamepadInput.moveX) > 0 || Math.abs(gamepadInput.moveY) > 0) {
+            vx = gamepadInput.moveX;
+            vy = gamepadInput.moveY;
+        }
+    }
+    
+    // Normalize movement vector
     const mag = Math.sqrt(vx*vx + vy*vy);
     if(mag > 0) { vx /= mag; vy /= mag; }
 
-    const angle = Math.atan2(mouse.y - me.y, mouse.x - me.x);
+    // Calculate aim angle
+    let angle;
+    if (gamepadInput && gamepadInput.hasAimInput) {
+        // Use right stick for aiming when gamepad is active
+        angle = Math.atan2(gamepadInput.aimY, gamepadInput.aimX);
+    } else {
+        // Use mouse for aiming
+        angle = Math.atan2(mouse.y - me.y, mouse.x - me.x);
+    }
+
+    // Determine attack state (mouse or right trigger)
+    const isAttacking = gamepadInput ? gamepadInput.attack : mouse.down;
+    const attackStart = gamepadInput ? gamepadInput.attackPressed : (mouse.down && !lastAttackStart);
+    const attackEnd = gamepadInput ? gamepadInput.attackReleased : (!mouse.down && lastAttackStart);
+    
+    // Determine lunge (spacebar or A button)
+    const lungePressed = gamepadInput ? gamepadInput.lunge : keys['Space'];
+    
+    // Determine shield (shift or left bumper)
+    const shieldActive = gamepadInput ? gamepadInput.shield : (keys['ShiftLeft'] || keys['ShiftRight']);
 
     const inputData = {
         vx: vx, vy: vy, angle: angle,
-        attackStart: mouse.down && !lastAttackStart,
-        attackEnd: !mouse.down && lastAttackStart,
-        lunge: keys['Space'],
-        shieldHeld: keys['ShiftLeft'] || keys['ShiftRight'],
+        attackStart: attackStart,
+        attackEnd: attackEnd,
+        lunge: lungePressed,
+        shieldHeld: shieldActive,
         roomCode: roomCode
     };
 
     socket.emit('playerInput', inputData);
-    lastAttackStart = mouse.down;
+    lastAttackStart = isAttacking;
 }
 
 function draw() {

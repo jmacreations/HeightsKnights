@@ -1,5 +1,6 @@
 // public/js/ui/hud.js
 import { WEAPONS_CONFIG } from '../config.js'; // Import from the new config file
+import { gamepadManager } from '../input/gamepadManager.js';
 
 export function updateHud() {
     const playerHud = document.getElementById('player-hud');
@@ -26,6 +27,11 @@ export function updateHud() {
         const minutes = Math.floor(window.gameRemainingTime / 60000);
         const seconds = Math.floor((window.gameRemainingTime % 60000) / 1000);
         hudText += ` | Time: ${minutes}:${seconds.toString().padStart(2, '0')}`;
+    }
+    
+    // Show controller indicator if connected
+    if (gamepadManager.isConnected()) {
+        hudText += ' | 🎮';
     }
     
     playerHud.textContent = hudText;

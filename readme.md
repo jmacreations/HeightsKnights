@@ -13,6 +13,8 @@ Real-time Multiplayer: Create or join game rooms that support up to 8 players.
 
 **Power-ups:** Grab weapon upgrades and shields that spawn periodically to turn the tide of battle.
 
+**Controller Support:** Play with Xbox, PlayStation, or other standard game controllers. See [Controller Support](docs/controller-support.md) for details.
+
 **Modern Tech Stack:** Built with a clean, separated frontend and backend for easy maintenance and scalability.
 
 ### Tech Stack
