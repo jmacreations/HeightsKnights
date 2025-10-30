@@ -26,10 +26,8 @@
   - [ ] Friendly Fire ON/OFF (team based only)
 - [x] Randomised spawn points
 - [x] Respawn invulnerability window (1.5sec)
-- [ ] Lights out mode (you can only see infront of you with your torch)
-- [ ] Fog of War (limitited visbility for a radius around the player)
+
 - NEW POWERUPS
-    - [ ] Temporary Night vision goggles (see through fog or dark) Only available in fog of war and night modes. Activated for 5secs on pickup.
     - 
 - NEW WEAPONS
     - [x] Grenade, powerup the throw strength similar to bow weapon. Grenade can bounce off walls to its landing point. 1sec fuse (fuse length adjustable in the weapon constants)

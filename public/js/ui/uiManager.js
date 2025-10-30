@@ -19,7 +19,7 @@ export function showScreen(screenName) {
     if (screenName === 'MENU') {
         screenHtml = `
             <div id="MENU" class="ui-screen flex flex-col items-center justify-center p-8 bg-gray-800 rounded-lg shadow-xl">
-                <h1 class="text-5xl mb-8">SlashDash<span class="text-3xl ml-2">/-</span></h1>
+                <h1 class="text-5xl mb-8">SlashDash</h1>
                 <div class="w-full max-w-sm">
                     <input id="name-input" type="text" placeholder="Enter Your Name" class="input-field w-full mb-4" maxlength="12">
                     <button id="create-room-btn" class="btn btn-green w-full mb-4">Create Room</button>
@@ -67,7 +67,7 @@ export function showScreen(screenName) {
                         <p>Weapons: <span class="text-white text-xs">${weaponsList}</span></p>
                         <p>Map: <span id="lobby-map-name" class="text-white">${mapLabel}</span></p>
                     </div>
-                    <button id="edit-settings-btn" class="hidden bg-gray-700 hover:bg-gray-600 text-white px-3 py-1 rounded text-xs">⚙ Edit</button>
+                    <button id="edit-settings-btn" class="hidden bg-gray-700 hover:bg-gray-600 text-white px-3 py-1 rounded text-xs">Edit</button>
                 </div>
                 <div id="player-list" class="flex flex-col items-center w-full gap-2 min-h-[100px]"></div>
                 <button id="start-game-btn" class="btn btn-green w-full mt-6 hidden">Start Game</button>
@@ -78,7 +78,7 @@ export function showScreen(screenName) {
                 <canvas id="gameCanvas"></canvas>
                 <div id="game-menu-modal" class="hidden absolute inset-0 bg-black bg-opacity-60 flex items-center justify-center z-10">
                     <div class="bg-gray-800 rounded-lg p-6 w-[300px] text-center shadow-xl">
-                        <h3 class="text-xl mb-4">Game Menu</h3>
+                        <h3 class="text-xl mb-4">Menu</h3>
                         <div id="menu-buttons" class="space-y-2"></div>
                         <button id="menu-close" class="mt-4 text-gray-400 hover:text-white text-sm">Resume</button>
                     </div>
