@@ -1,0 +1,23 @@
+{
+  "id": "crossfire",
+  "name": "Crossfire",
+  "layout": [
+    "     S      S     ",
+    "                  ",
+    "   N111    111N   ",
+    "   1   P  P   1   ",
+    "S 1          1  S ",
+    "                  ",
+    "   1111 NN 1111   ",
+    "   P     NN     P ",
+    "   1111 NN 1111   ",
+    "                  ",
+    "S 1          1  S ",
+    "   1   P  P   1   ",
+    "   N111    111N   ",
+    "                  ",
+    "     S      S     "
+  ],
+  "author": "AI Generated",
+  "description": "Balanced cross-shaped arena for diverse combat. Good mix of cover and open sightlines."
+}
