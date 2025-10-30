@@ -2,7 +2,7 @@
   "id": "crucible",
   "name": "The Crucible",
   "layout": [
-    "   S    NNN    S   ",
+    "   S    NNN   S   ",
     "  N111      111N  ",
     " 1   P  11  P   1 ",
     " 1  1        1  1 ",
@@ -12,7 +12,7 @@
     " 1  1        1  1 ",
     " 1   P  11  P   1 ",
     "  N111      111N  ",
-    "   S    NNN    S   "
+    "   S   NNN    S   "
   ],
   "author": "AI Generated",
   "description": "Tight, symmetrical map built for intense close-quarters combat with exactly eight spawn points."
