@@ -133,7 +133,7 @@ io.on('connection', (socket) => {
         }
     });
 
-    // Host-only: end current game and return all players to lobby without resetting scores
+    // Host-only: end current game and return all players to lobby
     socket.on('endGame', (roomCode, ack) => {
         try {
             const room = gameRooms[roomCode];
@@ -142,6 +142,10 @@ io.on('connection', (socket) => {
             // Stop gameplay and return to lobby
             room.state = 'LOBBY';
             if (room.countdownInterval) { clearInterval(room.countdownInterval); room.countdownInterval = null; }
+            // Reset all player scores when returning to lobby
+            Object.values(room.players).forEach(p => {
+                p.score = 0;
+            });
             room.walls = [];
             room.projectiles = [];
             room.powerups = [];
@@ -178,6 +182,10 @@ io.on('connection', (socket) => {
             }
             // Only send remaining players to lobby if just one player remains
             if (Object.keys(room.players).length === 1) {
+                // Reset scores when returning to lobby
+                Object.values(room.players).forEach(p => {
+                    p.score = 0;
+                });
                 room.state = 'LOBBY';
                 io.to(roomCode).emit('returnToLobby', room);
             }
@@ -301,6 +309,10 @@ io.on('connection', (socket) => {
                 }
                 // Only return to lobby if only one player remains
                 if (remaining === 1) {
+                    // Reset scores when returning to lobby
+                    Object.values(roomOfDisconnectedPlayer.players).forEach(p => {
+                        p.score = 0;
+                    });
                     roomOfDisconnectedPlayer.state = 'LOBBY';
                     if (roomOfDisconnectedPlayer.countdownInterval) { try { clearInterval(roomOfDisconnectedPlayer.countdownInterval); } catch {} }
                     io.to(roomCodeOfDisconnectedPlayer).emit('returnToLobby', roomOfDisconnectedPlayer);

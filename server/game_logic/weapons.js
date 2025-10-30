@@ -94,6 +94,10 @@ function updateLasers(room) {
     Object.values(room.players).forEach(player => {
         if (player.laserChargeTime > 0 && now >= player.laserChargeTime) {
             player.laserChargeTime = 0;
+            // Check if player is still alive before firing
+            if (!player.isAlive) {
+                return;
+            }
             if (player.weapon.ammo <= 0) { player.weapon = {...WEAPONS.sword}; return; }
             player.weapon.ammo--;
             

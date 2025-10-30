@@ -8,15 +8,21 @@ function getDistance(a, b) {
     return Math.sqrt(dx * dx + dy * dy);
 }
 
-// Checks if a position is colliding with any wall in the provided list.
+// Checks if a circular position (with radius buffer) is colliding with any wall in the provided list.
+// Uses circle-rectangle collision detection for accurate circular hitbox.
 function isCollidingWithWall(pos, walls, buffer = KNIGHT_RADIUS) {
     for (const wall of walls) {
-        if (
-            pos.x > wall.x - buffer &&
-            pos.x < wall.x + wall.width + buffer &&
-            pos.y > wall.y - buffer &&
-            pos.y < wall.y + wall.height + buffer
-        ) {
+        // Find the closest point on the wall rectangle to the circle center
+        const closestX = Math.max(wall.x, Math.min(pos.x, wall.x + wall.width));
+        const closestY = Math.max(wall.y, Math.min(pos.y, wall.y + wall.height));
+        
+        // Calculate distance from circle center to this closest point
+        const distanceX = pos.x - closestX;
+        const distanceY = pos.y - closestY;
+        const distanceSquared = (distanceX * distanceX) + (distanceY * distanceY);
+        
+        // Check if the distance is less than the circle's radius (buffer)
+        if (distanceSquared < (buffer * buffer)) {
             return true;
         }
     }

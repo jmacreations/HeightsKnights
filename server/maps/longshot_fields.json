@@ -1,0 +1,21 @@
+{
+  "id": "longshot_fields",
+  "name": "Longshot Fields",
+  "layout": [
+    "S               S",
+    "                 ",
+    " N11         11N ",
+    " 1   P     P   1 ",
+    "S1             1S",
+    " 1      NNN      ",
+    " P  S  11111  S P",
+    " 1      NNN      ",
+    "S1             1S",
+    " 1   P     P   1 ",
+    " N11         11N ",
+    "                 ",
+    "S               S"
+  ],
+  "author": "AI Generated",
+  "description": "Open field map supporting eight-player combat. Long sightlines for ranged fights and center cover for close duels."
+}

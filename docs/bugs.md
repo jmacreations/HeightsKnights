@@ -1,0 +1,3 @@
+- [x] Scores are not resetting at the end of a match when returning to the lobby.
+- [x] The Laser weapon fires at the end of the countdown, even if the player was killed during the powerup.
+- [x] the bounding box of the player seems to be square when the players is round. The hitbox should be the circle of the main body of the player.
