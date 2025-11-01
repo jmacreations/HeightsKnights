@@ -9,6 +9,8 @@ const keys = {};
 const mouse = { x: 0, y: 0, down: false };
 let lastAttackStart = false;
 let lastAttackEnd = false;
+let lastGamepadAimAngle = 0; // Track last gamepad aim direction
+let usingGamepadAim = false; // Track if we're currently using gamepad for aiming
 
 export function startGame() {
     gameCanvas = document.getElementById('gameCanvas');
@@ -23,8 +25,16 @@ export function startGame() {
     
     gameCanvas.addEventListener('mousemove', e => {
         const rect = gameCanvas.getBoundingClientRect();
-        mouse.x = (e.clientX - rect.left) / (rect.width / gameCanvas.width);
-        mouse.y = (e.clientY - rect.top) / (rect.height / gameCanvas.height);
+        const newMouseX = (e.clientX - rect.left) / (rect.width / gameCanvas.width);
+        const newMouseY = (e.clientY - rect.top) / (rect.height / gameCanvas.height);
+        
+        // If mouse moved significantly, switch back to mouse aiming
+        if (Math.abs(newMouseX - mouse.x) > 5 || Math.abs(newMouseY - mouse.y) > 5) {
+            usingGamepadAim = false;
+        }
+        
+        mouse.x = newMouseX;
+        mouse.y = newMouseY;
     });
     
     gameCanvas.addEventListener('mousedown', e => mouse.down = true);
@@ -64,9 +74,15 @@ function handleInput() {
     if (gamepadInput && gamepadInput.hasAimInput) {
         // Use right stick for aiming when gamepad is active
         angle = Math.atan2(gamepadInput.aimY, gamepadInput.aimX);
+        lastGamepadAimAngle = angle;
+        usingGamepadAim = true;
+    } else if (gamepadInput && usingGamepadAim) {
+        // Gamepad connected but no aim input - maintain last gamepad aim direction
+        angle = lastGamepadAimAngle;
     } else {
-        // Use mouse for aiming
+        // Use mouse for aiming (no gamepad or switched back to mouse)
         angle = Math.atan2(mouse.y - me.y, mouse.x - me.x);
+        usingGamepadAim = false;
     }
 
     // Determine attack state (mouse or right trigger)
