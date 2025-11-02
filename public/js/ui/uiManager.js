@@ -1,6 +1,8 @@
 // public/js/ui/uiManager.js
 import { getModeSelectHTML, addModeSelectListeners } from '../scenes/modeSelectScene.js';
 import { getMatchSettingsHTML, addMatchSettingsListeners } from '../scenes/matchSettingsScene.js';
+import { initPlayModeScene } from '../scenes/playModeScene.js';
+import { initControllerSetupScene, cleanupControllerSetupScene } from '../scenes/controllerSetupScene.js';
 import { GAME_MODES, WIN_TYPES } from '../config.js';
 
 export function showScreen(screenName) {
@@ -8,6 +10,12 @@ export function showScreen(screenName) {
     container.innerHTML = ''; // Clear previous screen
     document.getElementById('scoreboard').classList.add('hidden');
     document.getElementById('player-hud').classList.add('hidden');
+    
+    // Cleanup previous screen
+    if (uiState === 'CONTROLLER_SETUP') {
+        cleanupControllerSetupScene();
+    }
+    
     uiState = screenName;
 
     // Notify listeners about screen change (for cleanup like key handlers)
@@ -29,6 +37,14 @@ export function showScreen(screenName) {
                     </div>
                     <p id="menu-error" class="text-red-400 mt-4 text-center h-4"></p>
                 </div>
+            </div>`;
+    } else if (screenName === 'PLAY_MODE') {
+        screenHtml = `
+            <div id="play-mode-screen" class="ui-screen flex flex-col items-center justify-center p-8 bg-gray-800 rounded-lg shadow-xl">
+            </div>`;
+    } else if (screenName === 'CONTROLLER_SETUP') {
+        screenHtml = `
+            <div id="controller-setup-screen" class="ui-screen flex flex-col items-center justify-center p-8 bg-gray-800 rounded-lg shadow-xl max-w-4xl">
             </div>`;
     } else if (screenName === 'MODE_SELECT') {
         screenHtml = getModeSelectHTML(window.playerName);
@@ -89,6 +105,14 @@ export function showScreen(screenName) {
     }
 
     container.innerHTML = screenHtml;
+    
+    // Initialize special screens
+    if (screenName === 'PLAY_MODE') {
+        initPlayModeScene(window.playModeContext || 'create');
+    } else if (screenName === 'CONTROLLER_SETUP') {
+        initControllerSetupScene();
+    }
+    
     addEventListeners(screenName);
 }
 
@@ -101,12 +125,24 @@ function addEventListeners(screenName) {
                 return;
             }
             window.playerName = name;
-            showScreen('MODE_SELECT');
+            window.playModeContext = 'create';
+            showScreen('PLAY_MODE');
         };
         document.getElementById('join-room-btn').onclick = () => {
-            const name = document.getElementById('name-input').value;
+            const name = document.getElementById('name-input').value.trim();
             const code = document.getElementById('room-code-input').value.toUpperCase();
-            if (name && code) socket.emit('joinRoom', { roomCode: code, playerName: name });
+            if (!name) {
+                document.getElementById('menu-error').textContent = 'Please enter your name';
+                return;
+            }
+            if (!code) {
+                document.getElementById('menu-error').textContent = 'Please enter room code';
+                return;
+            }
+            window.playerName = name;
+            window.playModeContext = 'join';
+            window.pendingRoomCode = code;
+            showScreen('PLAY_MODE');
         };
     } else if (screenName === 'MODE_SELECT') {
         addModeSelectListeners();

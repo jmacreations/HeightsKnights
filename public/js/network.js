@@ -2,12 +2,17 @@
 import { showScreen, showMessage } from './ui/uiManager.js';
 import { updateLobbyUI } from './scenes/lobbyScene.js';
 import { updateScoreboard } from './ui/scoreboard.js';
+import { localPlayerManager } from './input/localPlayerManager.js';
 
 export function initializeSocket() {
     socket.on('roomCreated', (data) => {
         myId = data.myId;
         roomCode = data.roomCode;
         gameState = data.roomState;
+        
+        // Register local players if any
+        registerLocalPlayersWithServer();
+        
         showScreen('LOBBY');
         updateLobbyUI();
     });
@@ -16,6 +21,10 @@ export function initializeSocket() {
         myId = data.myId;
         roomCode = data.roomCode;
         gameState = data.roomState;
+        
+        // Register local players if any
+        registerLocalPlayersWithServer();
+        
         showScreen('LOBBY');
         updateLobbyUI();
     });
@@ -90,5 +99,46 @@ export function initializeSocket() {
     socket.on('gameResumed', () => {
         // Hide message overlay if visible
         showMessage('', 0, false);
+    });
+}
+
+/**
+ * Register local players with the server
+ */
+function registerLocalPlayersWithServer() {
+    const localPlayers = localPlayerManager.getAllPlayers();
+    
+    if (localPlayers.length === 0) {
+        return; // No local players to register
+    }
+    
+    const playersData = localPlayers.map(player => ({
+        id: player.id,
+        socketId: player.socketId,
+        localIndex: player.localIndex,
+        name: player.name,
+        color: player.color,
+        inputMethod: player.inputMethod,
+        controllerIndex: player.controllerIndex
+    }));
+    
+    socket.emit('registerLocalPlayers', {
+        roomCode: roomCode,
+        players: playersData
+    });
+    
+    console.log(`Registered ${localPlayers.length} local players with server`);
+}
+
+/**
+ * Send input for all local players
+ * @param {Array} playerInputs - Array of input objects for each local player
+ */
+export function sendPlayerInputs(playerInputs) {
+    if (!playerInputs || playerInputs.length === 0) return;
+    
+    socket.emit('playerInputs', {
+        roomCode: roomCode,
+        inputs: playerInputs
     });
 }

@@ -48,7 +48,7 @@ class GamepadManager {
             RIGHT_STICK_Y: 3
         };
         
-        // Track previous button states for edge detection
+        // Track previous button states for edge detection (per controller)
         this.previousButtonStates = {};
         
         this.init();
@@ -56,20 +56,23 @@ class GamepadManager {
     
     init() {
         window.addEventListener('gamepadconnected', (e) => {
-            console.log(`🎮 Gamepad connected: ${e.gamepad.id}`);
+            console.log(`🎮 Gamepad ${e.gamepad.index} connected: ${e.gamepad.id}`);
             this.gamepads[e.gamepad.index] = e.gamepad;
+            this.previousButtonStates[e.gamepad.index] = {};
             this.connected = true;
         });
         
         window.addEventListener('gamepaddisconnected', (e) => {
-            console.log(`🎮 Gamepad disconnected: ${e.gamepad.id}`);
+            console.log(`🎮 Gamepad ${e.gamepad.index} disconnected: ${e.gamepad.id}`);
             delete this.gamepads[e.gamepad.index];
+            delete this.previousButtonStates[e.gamepad.index];
             this.connected = Object.keys(this.gamepads).length > 0;
         });
     }
     
     /**
      * Poll gamepad state - must be called each frame
+     * Returns input from the first connected gamepad (backward compatibility)
      */
     poll() {
         if (!this.connected) return null;
@@ -87,6 +90,50 @@ class GamepadManager {
         if (!gamepad) return null;
         
         return this.getInputState(gamepad);
+    }
+    
+    /**
+     * Poll specific controller by index
+     * @param {number} controllerIndex - The gamepad index (0-3)
+     * @returns {Object|null} Input state for the specified controller
+     */
+    pollController(controllerIndex) {
+        // Get fresh gamepad state
+        const gamepads = navigator.getGamepads();
+        for (let i = 0; i < gamepads.length; i++) {
+            if (gamepads[i]) {
+                this.gamepads[i] = gamepads[i];
+            }
+        }
+        
+        const gamepad = gamepads[controllerIndex];
+        if (!gamepad || !gamepad.connected) return null;
+        
+        return this.getInputState(gamepad, controllerIndex);
+    }
+    
+    /**
+     * Get all connected controllers with their input states
+     * @returns {Array} Array of {index, gamepad, input} objects
+     */
+    getAllConnectedControllers() {
+        // Get fresh gamepad state
+        const gamepads = navigator.getGamepads();
+        const controllers = [];
+        
+        for (let i = 0; i < gamepads.length; i++) {
+            if (gamepads[i] && gamepads[i].connected) {
+                this.gamepads[i] = gamepads[i];
+                controllers.push({
+                    index: i,
+                    id: gamepads[i].id,
+                    gamepad: gamepads[i],
+                    input: this.getInputState(gamepads[i], i)
+                });
+            }
+        }
+        
+        return controllers;
     }
     
     /**
@@ -114,10 +161,19 @@ class GamepadManager {
     
     /**
      * Get current input state from gamepad
+     * @param {Gamepad} gamepad - The gamepad object
+     * @param {number} controllerIndex - The controller index for button state tracking
+     * @returns {Object} Input state object
      */
-    getInputState(gamepad) {
+    getInputState(gamepad, controllerIndex = null) {
         const axes = gamepad.axes;
         const buttons = gamepad.buttons;
+        const index = controllerIndex !== null ? controllerIndex : gamepad.index;
+        
+        // Initialize button state tracking for this controller if needed
+        if (!this.previousButtonStates[index]) {
+            this.previousButtonStates[index] = {};
+        }
         
         // Movement from left stick
         const moveX = this.applyDeadzone(axes[this.axes.LEFT_STICK_X]);
@@ -130,8 +186,8 @@ class GamepadManager {
         // Check if button was just pressed (edge detection)
         const wasPressed = (buttonIndex) => {
             const currentlyPressed = buttons[buttonIndex]?.pressed || false;
-            const previouslyPressed = this.previousButtonStates[buttonIndex] || false;
-            this.previousButtonStates[buttonIndex] = currentlyPressed;
+            const previouslyPressed = this.previousButtonStates[index][buttonIndex] || false;
+            this.previousButtonStates[index][buttonIndex] = currentlyPressed;
             return currentlyPressed && !previouslyPressed;
         };
         
@@ -158,7 +214,7 @@ class GamepadManager {
             // Actions
             attack: getTriggerValue(this.buttons.RT) > this.triggerThreshold,
             attackPressed: wasPressed(this.buttons.RT),
-            attackReleased: !isHeld(this.buttons.RT) && this.previousButtonStates[this.buttons.RT],
+            attackReleased: !isHeld(this.buttons.RT) && this.previousButtonStates[index][this.buttons.RT],
             
             lunge: wasPressed(this.buttons.A),
             lungeHeld: isHeld(this.buttons.A),

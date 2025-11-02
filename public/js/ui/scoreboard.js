@@ -1,4 +1,5 @@
 // public/js/ui/scoreboard.js
+import { localPlayerManager } from '../input/localPlayerManager.js';
 
 export function updateScoreboard(players, teams = null, isTeamMode = false, matchSettings = null) {
     const scoreboard = document.getElementById('scoreboard');
@@ -33,8 +34,13 @@ export function updateScoreboard(players, teams = null, isTeamMode = false, matc
                         memberList.className = 'text-xs mt-1';
                         members.forEach(member => {
                             const memberEl = document.createElement('div');
-                            memberEl.textContent = `${member.name}: ${member.score}`;
+                            const isLocal = localPlayerManager.isLocalPlayer(member.id);
+                            const localIcon = isLocal ? getLocalPlayerIcon(member.id) + ' ' : '';
+                            memberEl.textContent = `${localIcon}${member.name}: ${member.score}`;
                             memberEl.style.color = member.color;
+                            if (isLocal) {
+                                memberEl.style.fontWeight = 'bold';
+                            }
                             memberList.appendChild(memberEl);
                         });
                         teamEl.appendChild(memberList);
@@ -51,9 +57,26 @@ export function updateScoreboard(players, teams = null, isTeamMode = false, matc
         const sortedPlayers = Object.values(players).sort((a, b) => b.score - a.score);
         sortedPlayers.forEach(p => {
             const scoreEl = document.createElement('span');
-            scoreEl.textContent = `${p.name}: ${p.score}`;
+            const isLocal = localPlayerManager.isLocalPlayer(p.id);
+            const localIcon = isLocal ? getLocalPlayerIcon(p.id) + ' ' : '';
+            scoreEl.textContent = `${localIcon}${p.name}: ${p.score}`;
             scoreEl.style.color = p.color;
+            if (isLocal) {
+                scoreEl.style.fontWeight = 'bold';
+            }
             scoreboard.appendChild(scoreEl);
         });
     }
+}
+
+/**
+ * Get icon for local player based on input method
+ */
+function getLocalPlayerIcon(playerId) {
+    const localPlayer = localPlayerManager.getPlayer(playerId);
+    if (!localPlayer) return '';
+    
+    return localPlayer.inputMethod === 'keyboard' 
+        ? '⌨️' 
+        : `🎮${localPlayer.controllerIndex + 1}`;
 }

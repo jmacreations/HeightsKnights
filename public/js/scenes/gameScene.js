@@ -3,6 +3,9 @@ import { updateScoreboard } from '../ui/scoreboard.js';
 import { updateHud } from '../ui/hud.js';
 import { WEAPONS_CONFIG, KNIGHT_RADIUS, WALL_SIZE, SHIELD_MAX_ENERGY } from '../config.js';
 import { gamepadManager } from '../input/gamepadManager.js';
+import { localPlayerManager } from '../input/localPlayerManager.js';
+import { inputManager } from '../input/inputManager.js';
+import { sendPlayerInputs } from '../network.js';
 
 let ctx, gameCanvas;
 const keys = {};
@@ -16,6 +19,9 @@ export function startGame() {
     gameCanvas = document.getElementById('gameCanvas');
     if (!gameCanvas) return;
     ctx = gameCanvas.getContext('2d');
+    
+    // Attach mouse to canvas for input manager
+    inputManager.attachMouseToCanvas(gameCanvas);
     
     resizeCanvas();
     window.onresize = resizeCanvas;
@@ -44,6 +50,20 @@ export function startGame() {
 }
 
 function handleInput() {
+    const localPlayers = localPlayerManager.getAllPlayers();
+    
+    // Check if using local multiplayer
+    if (localPlayers.length > 0) {
+        handleLocalMultiplayerInput();
+    } else {
+        handleSinglePlayerInput();
+    }
+}
+
+/**
+ * Handle input for single player (backward compatibility)
+ */
+function handleSinglePlayerInput() {
     const me = gameState.players?.[myId];
     if (!me || !me.isAlive) return;
 
@@ -107,6 +127,40 @@ function handleInput() {
 
     socket.emit('playerInput', inputData);
     lastAttackStart = isAttacking;
+}
+
+/**
+ * Handle input for local multiplayer
+ */
+function handleLocalMultiplayerInput() {
+    const localPlayers = localPlayerManager.getAllPlayers();
+    const playerInputs = [];
+    
+    localPlayers.forEach(player => {
+        const serverPlayer = gameState.players?.[player.id];
+        if (!serverPlayer || !serverPlayer.isAlive) return;
+        
+        // Get input for this player
+        const input = inputManager.getPlayerInput(player.id, serverPlayer);
+        
+        if (input) {
+            playerInputs.push({
+                playerId: player.id,
+                vx: input.vx,
+                vy: input.vy,
+                angle: input.angle,
+                attackStart: input.attackStart,
+                attackEnd: input.attackEnd,
+                lunge: input.lunge,
+                shieldHeld: input.shieldHeld
+            });
+        }
+    });
+    
+    // Send all player inputs at once
+    if (playerInputs.length > 0) {
+        sendPlayerInputs(playerInputs);
+    }
 }
 
 function draw() {
@@ -191,7 +245,24 @@ function draw() {
     
     Object.values(gameState.players).forEach(p => {
         if(!p.isAlive) return;
+        
+        // Check if this is a local player
+        const isLocalPlayer = localPlayerManager.isLocalPlayer(p.id);
+        
         ctx.save(); ctx.translate(p.x, p.y);
+        
+        // Add subtle glow for local players
+        if (isLocalPlayer) {
+            ctx.shadowColor = p.color;
+            ctx.shadowBlur = 15;
+            ctx.strokeStyle = p.color;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(0, 0, KNIGHT_RADIUS + 3, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.shadowBlur = 0; // Reset shadow
+        }
+        
         ctx.fillStyle = 'white'; ctx.font = '12px "Press Start 2P"'; ctx.textAlign = 'center';
         ctx.fillText(p.name, 0, -KNIGHT_RADIUS - 15);
         if (p.weapon.type !== 'sword') {
@@ -216,14 +287,16 @@ function draw() {
             ctx.beginPath(); ctx.arc(0, 0, KNIGHT_RADIUS + 5 + (chargeAmount * 5), 0, 2*Math.PI); ctx.fill();
         }
 
-        if (p.bowChargeStartTime > 0 && p.id === myId) {
+        // Show charge indicators for local players
+        if (isLocalPlayer) {
+            if (p.bowChargeStartTime > 0) {
                 const chargeAmount = Math.min(1, (now - p.bowChargeStartTime) / 500);
                 ctx.fillStyle = `rgba(250, 204, 21, ${chargeAmount * 0.5})`;
                 ctx.beginPath(); ctx.arc(0, 0, KNIGHT_RADIUS + 5 + (chargeAmount * 5), 0, 2*Math.PI); ctx.fill();
-        }
-        
-        // Draw grenade charge indicator
-        if (p.grenadeChargeStartTime > 0 && p.id === myId) {
+            }
+            
+            // Draw grenade charge indicator
+            if (p.grenadeChargeStartTime > 0) {
                 const chargeAmount = Math.min(1, (now - p.grenadeChargeStartTime) / 1000);
                 ctx.fillStyle = `rgba(34, 197, 94, ${chargeAmount * 0.5})`;
                 ctx.beginPath(); ctx.arc(0, 0, KNIGHT_RADIUS + 5 + (chargeAmount * 5), 0, 2*Math.PI); ctx.fill();
@@ -238,6 +311,7 @@ function draw() {
                 ctx.setLineDash([5, 5]);
                 ctx.stroke();
                 ctx.setLineDash([]);
+            }
         }
         
         ctx.fillStyle = p.color;

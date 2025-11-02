@@ -1,5 +1,6 @@
 // public/js/scenes/lobbyScene.js
 import { GAME_MODES } from '../config.js';
+import { localPlayerManager } from '../input/localPlayerManager.js';
 
 export function updateLobbyUI() {
     if (!gameState.players) return;
@@ -7,8 +8,54 @@ export function updateLobbyUI() {
     if(!playerList) return;
     playerList.innerHTML = '';
     
+    const localPlayers = localPlayerManager.getAllPlayers();
+    const hasLocalPlayers = localPlayers.length > 0;
     const playerCount = Object.keys(gameState.players).length;
     const isTeamMode = gameState.matchSettings?.playType === 'team';
+    
+    // LOCAL PLAYERS SECTION
+    if (hasLocalPlayers) {
+        const localSection = document.createElement('div');
+        localSection.className = 'mb-6 w-full max-w-md';
+        
+        const localTitle = document.createElement('h3');
+        localTitle.className = 'text-2xl font-bold mb-3 text-yellow-400';
+        localTitle.textContent = '🎮 LOCAL PLAYERS';
+        localSection.appendChild(localTitle);
+        
+        localPlayers.forEach(player => {
+            const playerEl = document.createElement('div');
+            playerEl.className = 'bg-gray-700 p-3 rounded-lg mb-2 flex items-center justify-between';
+            playerEl.style.color = player.color;
+            
+            const nameSpan = document.createElement('span');
+            nameSpan.textContent = player.name;
+            
+            const inputLabel = player.inputMethod === 'keyboard' 
+                ? '⌨️' 
+                : `🎮${player.controllerIndex + 1}`;
+            const inputSpan = document.createElement('span');
+            inputSpan.className = 'text-sm text-gray-400';
+            inputSpan.textContent = inputLabel;
+            
+            playerEl.appendChild(nameSpan);
+            playerEl.appendChild(inputSpan);
+            localSection.appendChild(playerEl);
+        });
+        
+        playerList.appendChild(localSection);
+        
+        // Divider
+        const divider = document.createElement('div');
+        divider.className = 'w-full max-w-md h-px bg-gray-600 mb-6';
+        playerList.appendChild(divider);
+        
+        // Online players title
+        const onlineTitle = document.createElement('h3');
+        onlineTitle.className = 'text-2xl font-bold mb-3 text-blue-400';
+        onlineTitle.textContent = '🌐 ONLINE PLAYERS';
+        playerList.appendChild(onlineTitle);
+    }
     
     // Show team balancing bonuses if in team mode
     if (isTeamMode && gameState.teams) {

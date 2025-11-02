@@ -92,7 +92,9 @@ io.on('connection', (socket) => {
         
         // Assign host to team if in team mode
         const hostPlayer = room.players[socket.id];
-        assignTeamToPlayer(hostPlayer, room, playerName, roomCode);
+        if (hostPlayer) {
+            assignTeamToPlayer(hostPlayer, room, playerName, roomCode);
+        }
         
         gameRooms[roomCode] = room;
         socket.emit('roomCreated', { roomCode, roomState: room, myId: socket.id });
@@ -117,6 +119,42 @@ io.on('connection', (socket) => {
         room.players[socket.id] = player;
         socket.emit('joinSuccess', { roomCode, roomState: room, myId: socket.id });
         socket.to(roomCode).emit('updateLobby', room);
+    });
+    
+    // Register local players for local multiplayer
+    socket.on('registerLocalPlayers', ({ roomCode, players }) => {
+        const room = gameRooms[roomCode];
+        if (!room) return;
+        
+        console.log(`[LOCAL PLAYERS] ${socket.id} registering ${players.length} local players`);
+        
+        // Remove the socket's original player (it will be replaced by local players)
+        if (room.players[socket.id]) {
+            delete room.players[socket.id];
+        }
+        
+        // Add each local player
+        players.forEach((playerData, index) => {
+            const playerId = playerData.id;
+            const playerCount = Object.keys(room.players).length;
+            const color = playerData.color || availableColors[playerCount % availableColors.length];
+            
+            const player = createNewPlayer(playerId, playerData.name, color);
+            player.socketId = socket.id;
+            player.localIndex = playerData.localIndex;
+            player.inputMethod = playerData.inputMethod;
+            player.controllerIndex = playerData.controllerIndex;
+            
+            // Auto-assign to team if in team mode
+            assignTeamToPlayer(player, room, playerData.name, roomCode);
+            
+            room.players[playerId] = player;
+            
+            console.log(`  Added local player: ${playerData.name} (${playerId})`);
+        });
+        
+        // Update lobby for all clients
+        io.to(roomCode).emit('updateLobby', room);
     });
     
     socket.on('startGame', (roomCode) => {
@@ -159,6 +197,27 @@ io.on('connection', (socket) => {
                 player.shieldActive = data.shieldHeld && player.hasShield && player.shieldEnergy > 0;
             }
         }
+    });
+    
+    // Handle multiple player inputs (local multiplayer)
+    socket.on('playerInputs', ({ roomCode, inputs }) => {
+        const room = gameRooms[roomCode];
+        if (!room) return;
+        
+        inputs.forEach(inputData => {
+            const player = room.players[inputData.playerId];
+            if (player && player.socketId === socket.id) {
+                player.angle = inputData.angle;
+                if (room.state === 'PLAYING' && player.isAlive) {
+                    player.vx = inputData.vx;
+                    player.vy = inputData.vy;
+                    if (inputData.attackStart) handleAttackStart(player, room);
+                    if (inputData.attackEnd) handleAttackEnd(player, room);
+                    if (inputData.lunge) handleLunge(player);
+                    player.shieldActive = inputData.shieldHeld && player.hasShield && player.shieldEnergy > 0;
+                }
+            }
+        });
     });
 
     // Host-only: assign player to team
@@ -360,17 +419,36 @@ io.on('connection', (socket) => {
         let roomCodeOfDisconnectedPlayer = null;
         let roomOfDisconnectedPlayer = null;
 
+        // Find all players belonging to this socket (including local players)
         for (const code in gameRooms) {
-            if (gameRooms[code].players[socket.id]) {
+            const room = gameRooms[code];
+            const hasPlayer = Object.values(room.players).some(p => 
+                p.id === socket.id || p.socketId === socket.id
+            );
+            
+            if (hasPlayer) {
                 roomCodeOfDisconnectedPlayer = code;
-                roomOfDisconnectedPlayer = gameRooms[code];
+                roomOfDisconnectedPlayer = room;
                 break;
             }
         }
 
         if (roomOfDisconnectedPlayer) {
-            console.log(`Player ${socket.id} disconnected from room ${roomCodeOfDisconnectedPlayer}`);
-            delete roomOfDisconnectedPlayer.players[socket.id];
+            console.log(`Socket ${socket.id} disconnected from room ${roomCodeOfDisconnectedPlayer}`);
+            
+            // Remove all players associated with this socket (main player + local players)
+            const disconnectedPlayerIds = [];
+            for (const playerId in roomOfDisconnectedPlayer.players) {
+                const player = roomOfDisconnectedPlayer.players[playerId];
+                if (player.id === socket.id || player.socketId === socket.id) {
+                    disconnectedPlayerIds.push(playerId);
+                }
+            }
+            
+            disconnectedPlayerIds.forEach(playerId => {
+                delete roomOfDisconnectedPlayer.players[playerId];
+                console.log(`  Removed player: ${playerId}`);
+            });
 
             const remaining = Object.keys(roomOfDisconnectedPlayer.players).length;
             if (remaining === 0) {
