@@ -49,9 +49,14 @@ function createLayout(container) {
     
     // Instructions
     const instructions = document.createElement('p');
-    instructions.className = 'text-lg mb-8 text-gray-300';
-    instructions.textContent = 'Press any button on your keyboard or controller to join';
+    instructions.className = 'text-lg mb-2 text-gray-300';
+    instructions.textContent = 'Press ENTER on keyboard or START on controller to join';
     container.appendChild(instructions);
+    
+    const subInstructions = document.createElement('p');
+    subInstructions.className = 'text-sm mb-8 text-gray-400';
+    subInstructions.textContent = '(Use any button on controller to test connection)';
+    container.appendChild(subInstructions);
     
     // Available inputs section
     const availableSection = document.createElement('div');
@@ -118,12 +123,9 @@ function stopInputPolling() {
  * Check for new input presses
  */
 function checkForNewInputs() {
-    // Check keyboard
-    if (!localPlayerManager.isInputMethodAssigned('keyboard')) {
-        // Keyboard detection is handled by keydown event (set up below)
-    }
+    // Keyboard is handled by keydown event listener (only Enter key)
     
-    // Check gamepads
+    // Check gamepads for START button specifically
     const gamepads = gamepadManager.getAllConnectedControllers();
     gamepads.forEach(gamepadData => {
         const index = gamepadData.index;
@@ -133,10 +135,10 @@ function checkForNewInputs() {
             return;
         }
         
-        // Check if any button pressed
-        const anyButtonPressed = gamepadData.input.buttons.some(btn => btn);
+        // Check if START button pressed (button index 9 on standard mapping)
+        const startButtonPressed = gamepadData.input.buttons[9]; // START button
         
-        if (anyButtonPressed) {
+        if (startButtonPressed) {
             addPendingPlayer('gamepad', index);
         }
     });
@@ -379,10 +381,13 @@ export function cleanupControllerSetupScene() {
     stopInputPolling();
 }
 
-// Keyboard detection
+// Keyboard detection - only Enter key
 document.addEventListener('keydown', (e) => {
     // Only detect when on controller setup screen
     if (window.uiState !== 'CONTROLLER_SETUP') return;
+    
+    // Only respond to Enter key
+    if (e.code !== 'Enter' && e.key !== 'Enter') return;
     
     // Skip if keyboard already assigned
     if (localPlayerManager.isInputMethodAssigned('keyboard')) return;

@@ -451,7 +451,10 @@ function resizeCanvas(){
     const mapPixelWidth = (typeof gameState?.mapWidth === 'number' && gameState.mapWidth > 0) ? gameState.mapWidth : defaultWidth;
     const mapPixelHeight = (typeof gameState?.mapHeight === 'number' && gameState.mapHeight > 0) ? gameState.mapHeight : defaultHeight;
     const scoreboard = document.getElementById('scoreboard');
-    const availableHeight = window.innerHeight - (scoreboard.offsetHeight + 60); 
+    const hud = document.getElementById('player-hud');
+    const scoreboardHeight = scoreboard?.offsetHeight || 0;
+    const hudHeight = hud?.offsetHeight || 0;
+    const availableHeight = window.innerHeight - (scoreboardHeight + hudHeight + 40); // Extra padding
     const availableWidth = window.innerWidth;
     let scale = Math.min(availableWidth / mapPixelWidth, availableHeight / mapPixelHeight);
     if(gameCanvas) {

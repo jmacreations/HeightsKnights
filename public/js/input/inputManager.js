@@ -21,6 +21,9 @@ class InputManager {
             canvasY: 0
         };
         
+        // Previous mouse state for edge detection
+        this.previousMouseDown = false;
+        
         // Track last input method used
         this.lastKeyboardInput = 0;
         this.lastMouseInput = 0;
@@ -28,6 +31,9 @@ class InputManager {
         // Controller assignments for local players
         // { playerId: { inputMethod: 'keyboard'|'gamepad', controllerIndex: number|null } }
         this.playerInputAssignments = {};
+        
+        // Track previous gamepad aim angles per player to persist aim direction
+        this.previousGamepadAimAngles = {};
         
         this.init();
     }
@@ -130,6 +136,12 @@ class InputManager {
         const aimX = Math.cos(aimAngle);
         const aimY = Math.sin(aimAngle);
         
+        // Edge detection for mouse button
+        const currentMouseDown = this.mouse.down;
+        const attackPressed = currentMouseDown && !this.previousMouseDown;
+        const attackReleased = !currentMouseDown && this.previousMouseDown;
+        this.previousMouseDown = currentMouseDown;
+        
         return {
             // Movement
             moveX: vx,
@@ -143,8 +155,8 @@ class InputManager {
             
             // Actions
             attack: this.mouse.down,
-            attackPressed: false, // Would need edge detection
-            attackReleased: false,
+            attackPressed: attackPressed,
+            attackReleased: attackReleased,
             
             lunge: this.keys['Space'] || false,
             lungeHeld: this.keys['Space'] || false,
@@ -209,13 +221,15 @@ class InputManager {
             vy /= mag;
         }
         
-        // Calculate angle
+        // Calculate angle - persist last angle for gamepads when no aim input
         let angle;
         if (rawInput.hasAimInput) {
             angle = Math.atan2(rawInput.aimY, rawInput.aimX);
+            // Store this angle for this player
+            this.previousGamepadAimAngles[playerId] = angle;
         } else {
-            // No aim input, use last known angle or default to right
-            angle = rawInput.aimAngle || 0;
+            // No aim input - use last known angle for this player, or server's current angle, or default
+            angle = this.previousGamepadAimAngles[playerId] || playerData.angle || 0;
         }
         
         return {

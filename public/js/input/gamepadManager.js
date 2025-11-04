@@ -18,7 +18,7 @@ class GamepadManager {
         this.gamepads = {};
         this.connected = false;
         this.deadzone = 0.15; // Prevent stick drift
-        this.triggerThreshold = 0.1; // Analog trigger sensitivity
+        this.triggerThreshold = 0.75; // Analog trigger sensitivity (increased to avoid drift)
         
         // Button indices for standard gamepad mapping
         this.buttons = {
@@ -191,6 +191,14 @@ class GamepadManager {
             return currentlyPressed && !previouslyPressed;
         };
         
+        // Check if button was just released (edge detection)
+        const wasReleased = (buttonIndex) => {
+            const currentlyPressed = buttons[buttonIndex]?.pressed || false;
+            const previouslyPressed = this.previousButtonStates[index][buttonIndex] || false;
+            // Don't update state here - wasPressed already did it
+            return !currentlyPressed && previouslyPressed;
+        };
+        
         // Check if button is currently held
         const isHeld = (buttonIndex) => {
             return buttons[buttonIndex]?.pressed || false;
@@ -201,7 +209,19 @@ class GamepadManager {
             return buttons[buttonIndex]?.value || 0;
         };
         
-        return {
+        // For triggers, we need special handling since they can be analog
+        const rtValue = getTriggerValue(this.buttons.RT);
+        const rtButtonPressed = buttons[this.buttons.RT]?.pressed || false; // Browser's own threshold
+        // Just use the browser's pressed state - it handles different controllers properly
+        const currentTriggerPressed = rtButtonPressed;
+        const previousTriggerPressed = this.previousButtonStates[index][this.buttons.RT] || false;
+        const triggerPressed = currentTriggerPressed && !previousTriggerPressed;
+        const triggerReleased = !currentTriggerPressed && previousTriggerPressed;
+        
+        // Update state AFTER calculating edges
+        this.previousButtonStates[index][this.buttons.RT] = currentTriggerPressed;
+        
+        const result = {
             // Movement (left stick or D-pad)
             moveX: moveX || (isHeld(this.buttons.DPAD_RIGHT) ? 1 : 0) - (isHeld(this.buttons.DPAD_LEFT) ? 1 : 0),
             moveY: moveY || (isHeld(this.buttons.DPAD_DOWN) ? 1 : 0) - (isHeld(this.buttons.DPAD_UP) ? 1 : 0),
@@ -212,12 +232,12 @@ class GamepadManager {
             hasAimInput: Math.abs(aimX) > 0 || Math.abs(aimY) > 0,
             
             // Actions
-            attack: getTriggerValue(this.buttons.RT) > this.triggerThreshold,
-            attackPressed: wasPressed(this.buttons.RT),
-            attackReleased: !isHeld(this.buttons.RT) && this.previousButtonStates[index][this.buttons.RT],
+            attack: currentTriggerPressed,
+            attackPressed: triggerPressed,
+            attackReleased: triggerReleased,
             
-            lunge: wasPressed(this.buttons.A),
-            lungeHeld: isHeld(this.buttons.A),
+            lunge: wasPressed(this.buttons.RB),
+            lungeHeld: isHeld(this.buttons.RB),
             
             shield: isHeld(this.buttons.LB),
             
@@ -227,6 +247,8 @@ class GamepadManager {
             buttons: buttons.map(b => b.pressed),
             axes: axes
         };
+        
+        return result;
     }
     
     /**

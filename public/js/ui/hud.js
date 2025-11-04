@@ -29,7 +29,7 @@ function updateSinglePlayerHud(playerHud) {
     }
 
     let hudText = `Weapon: ${WEAPONS_CONFIG[me.weapon.type]?.name || 'Sword'}`;
-    if (me.weapon.ammo !== Infinity) {
+    if (me.weapon.ammo !== Infinity && me.weapon.ammo != null) {
         hudText += ` (${me.weapon.ammo})`;
     }
     if (me.hasShield) {
@@ -96,12 +96,19 @@ function updateLocalPlayersHud(playerHud, localPlayers) {
         // Weapon info
         const weaponDiv = document.createElement('div');
         weaponDiv.className = 'text-xs';
-        let weaponText = `${WEAPONS_CONFIG[serverPlayer.weapon.type]?.name || 'Sword'}`;
-        if (serverPlayer.weapon.ammo !== Infinity) {
-            weaponText += ` (${serverPlayer.weapon.ammo})`;
+        const weaponName = WEAPONS_CONFIG[serverPlayer.weapon.type]?.name || 'Sword';
+        weaponDiv.textContent = weaponName;
+        
+        // Only show ammo if it's not infinite and not null
+        if (serverPlayer.weapon.ammo !== Infinity && serverPlayer.weapon.ammo != null) {
+            const ammoDiv = document.createElement('div');
+            ammoDiv.className = 'text-xs text-yellow-400';
+            ammoDiv.textContent = `Ammo: ${serverPlayer.weapon.ammo}`;
+            playerDiv.appendChild(weaponDiv);
+            playerDiv.appendChild(ammoDiv);
+        } else {
+            playerDiv.appendChild(weaponDiv);
         }
-        weaponDiv.textContent = weaponText;
-        playerDiv.appendChild(weaponDiv);
         
         // Shield info
         if (serverPlayer.hasShield) {
