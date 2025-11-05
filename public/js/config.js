@@ -55,14 +55,14 @@ export const WIN_TYPES = {
 };
 
 export const WEAPONS_CONFIG = {
-    sword: { name: 'Sword', color: '#d1d5db' },
-    bow: { name: 'Bow', color: '#facc15', ammo: 20 },
+    sword: { name: 'Sword', color: '#ffffffff' },
+    bow: { name: 'Bow', color: '#904d00ff', ammo: 20 },
     shotgun: { name: 'Shotgun', color: '#fb923c', ammo: 12 },
-    laser: { name: 'Laser', color: '#f87171', ammo: 2 },
+    laser: { name: 'Laser', color: '#ff0000ff', ammo: 2 },
     minigun: { name: 'Minigun', color: '#9ca3af', ammo: 60 },
-    grenade: { name: 'Grenade', color: '#22c55e', ammo: 3 },
-    mine: { name: 'Mine', color: '#ef4444', ammo: 1 },
-    shield: { name: 'Shield', color: '#38bdf8' }
+    grenade: { name: 'Grenade', color: '#22984dff', ammo: 3 },
+    mine: { name: 'Mine', color: '#e5ff00ff', ammo: 1 },
+    shield: { name: 'Shield', color: '#a1e3ffff' }
 };
 
 export const KNIGHT_RADIUS = 20;

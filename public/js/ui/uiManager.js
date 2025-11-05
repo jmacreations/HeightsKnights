@@ -140,9 +140,9 @@ export function showScreen(screenName) {
             <div id="LOBBY" class="ui-screen flex flex-col items-center p-8 bg-gray-800 rounded-lg shadow-xl w-[500px]">
                 <h2 class="text-3xl mb-2">LOBBY</h2>
                 <div class="flex items-center gap-2 mb-2">
-                    <p class="text-2xl font-mono bg-gray-900 px-4 py-2 rounded-md">${roomCode}</p>
+                    <p class="text-xl font-mono bg-gray-900 px-4 py-2 rounded-md"><span class="text-grey-400 text small">ROOM CODE: </span>${roomCode}</p>
                     <button id="share-link-btn" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded text-sm transition-colors" title="Share join link">
-                        📋 Share Link
+                        🔗 Share Link
                     </button>
                 </div>
                 <div class="text-sm text-gray-400 mb-4 text-center flex items-center gap-3">

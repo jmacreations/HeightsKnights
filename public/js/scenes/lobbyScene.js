@@ -21,7 +21,7 @@ export function updateLobbyUI() {
         
         const localTitle = document.createElement('h3');
         localTitle.className = 'text-2xl font-bold mb-3 text-yellow-400';
-        localTitle.textContent = '🎮 LOCAL PLAYERS';
+        localTitle.textContent = '💻 LOCAL PLAYERS';
         localSection.appendChild(localTitle);
         
         localPlayers.forEach(player => {
