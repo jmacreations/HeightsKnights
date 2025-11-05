@@ -17,6 +17,9 @@ export function getMatchSettingsHTML(playerName, gameMode) {
     const currentFriendlyFire = (inLobby && window.gameState?.matchSettings?.friendlyFire !== undefined)
         ? window.gameState.matchSettings.friendlyFire
         : false;
+    const currentPlayerSpeed = (inLobby && window.gameState?.matchSettings?.playerSpeed !== undefined)
+        ? window.gameState.matchSettings.playerSpeed
+        : 100;
     
     // Generate win type radio buttons
     const winTypeOptions = Object.entries(WIN_TYPES).map(([key, config]) => `
@@ -135,6 +138,28 @@ export function getMatchSettingsHTML(playerName, gameMode) {
                     </div>
                 </div>
                 
+                <!-- Player Speed -->
+                <div class="bg-gray-700 p-4 rounded-lg">
+                    <label for="player-speed-select" class="block text-lg font-bold mb-3">Player Speed</label>
+                    <select id="player-speed-select" class="input-field w-full">
+                        <option value="100">Normal (100%)</option>
+                        <option value="150">Faster (150%)</option>
+                        <option value="200">Super Fast (200%)</option>
+                    </select>
+                    <div class="text-xs text-gray-400 mt-1">Increase player movement speed.</div>
+                </div>
+                
+                <!-- Weapon Spawn Rate -->
+                <div class="bg-gray-700 p-4 rounded-lg">
+                    <label for="weapon-spawn-rate-select" class="block text-lg font-bold mb-3">Weapon Spawn Rate</label>
+                    <select id="weapon-spawn-rate-select" class="input-field w-full">
+                        <option value="100">Normal (100%)</option>
+                        <option value="150">Faster (150%)</option>
+                        <option value="200">Super Fast (200%)</option>
+                    </select>
+                    <div class="text-xs text-gray-400 mt-1">Increase how quickly weapons spawn.</div>
+                </div>
+                
                 <!-- Friendly Fire Setting (Team Mode Only) -->
                 ${gameMode === 'teamBattle' ? `
                 <div class="bg-gray-700 p-4 rounded-lg">
@@ -174,6 +199,12 @@ export function addMatchSettingsListeners() {
     let currentFriendlyFire = (inLobby && window.gameState?.matchSettings?.friendlyFire !== undefined) 
         ? window.gameState.matchSettings.friendlyFire 
         : false;
+    let currentPlayerSpeed = (inLobby && window.gameState?.matchSettings?.playerSpeed)
+        ? window.gameState.matchSettings.playerSpeed
+        : 100;
+    let currentWeaponSpawnRate = (inLobby && window.gameState?.matchSettings?.weaponSpawnRate)
+        ? window.gameState.matchSettings.weaponSpawnRate
+        : 100;
     
     if (inLobby && window.gameState?.matchSettings) {
         currentScore = Number(window.gameState.matchSettings.scoreTarget) || 5;
@@ -184,6 +215,8 @@ export function addMatchSettingsListeners() {
     const maxScore = 20;
     const minTime = 1;
     const maxTime = 15;
+    const minSpeed = 100;
+    const maxSpeed = 200;
     
     // Get UI elements
     const scoreDisplay = document.getElementById('score-display');
@@ -192,6 +225,8 @@ export function addMatchSettingsListeners() {
     const scoreDescription = document.getElementById('score-description');
     const scoreSection = document.getElementById('score-target-section');
     const timeSection = document.getElementById('time-limit-section');
+    const playerSpeedSelect = document.getElementById('player-speed-select');
+    const weaponSpawnRateSelect = document.getElementById('weapon-spawn-rate-select');
     const scoreDecreaseBtn = document.getElementById('score-decrease');
     const scoreIncreaseBtn = document.getElementById('score-increase');
     const timeDisplay = document.getElementById('time-display');
@@ -200,7 +235,10 @@ export function addMatchSettingsListeners() {
     const mapSelectEl = document.getElementById('map-select');
     const mapMetaEl = document.getElementById('map-meta');
     const mapPreviewCanvas = document.getElementById('map-preview');
-    const mapPreviewCtx = mapPreviewCanvas?.getContext ? mapPreviewCanvas.getContext('2d') : null;
+    const mapPreviewCtx = mapPreviewCanvas ? mapPreviewCanvas.getContext('2d') : null;
+    const friendlyFireToggle = document.getElementById('friendly-fire-toggle');
+    
+    // --- INITIAL STATE ---
     
     // Update UI based on win type
     function updateUIForWinType(winType) {
@@ -297,6 +335,22 @@ export function addMatchSettingsListeners() {
         }
     };
     
+    // Player Speed dropdown
+    if (playerSpeedSelect) {
+        playerSpeedSelect.value = currentPlayerSpeed.toString();
+        playerSpeedSelect.addEventListener('change', (e) => {
+            currentPlayerSpeed = Number(e.target.value);
+        });
+    }
+    
+    // Weapon Spawn Rate dropdown
+    if (weaponSpawnRateSelect) {
+        weaponSpawnRateSelect.value = currentWeaponSpawnRate.toString();
+        weaponSpawnRateSelect.addEventListener('change', (e) => {
+            currentWeaponSpawnRate = Number(e.target.value);
+        });
+    }
+    
     // Back button
     document.getElementById('back-settings-btn').onclick = () => {
         if (window.settingsContext === 'lobby') {
@@ -329,7 +383,9 @@ export function addMatchSettingsListeners() {
             timeLimit: currentTimeLimit,
             mapId: currentMapId,
             enabledWeapons: enabledWeapons,
-            friendlyFire: gameMode === 'teamBattle' ? document.getElementById('friendly-fire-checkbox')?.checked || false : false
+            friendlyFire: gameMode === 'teamBattle' ? document.getElementById('friendly-fire-checkbox')?.checked || false : false,
+            playerSpeed: currentPlayerSpeed,
+            weaponSpawnRate: currentWeaponSpawnRate
         };
         
         if (window.settingsContext === 'lobby' && window.roomCode) {
@@ -445,4 +501,98 @@ export function addMatchSettingsListeners() {
             }
         });
     }
+    
+    // --- EVENT LISTENERS ---
+    
+    // Player Speed
+    if (playerSpeedSlider) {
+        playerSpeedSlider.value = currentPlayerSpeed;
+        playerSpeedDisplay.textContent = `${currentPlayerSpeed}%`;
+        playerSpeedSlider.addEventListener('input', (e) => {
+            currentPlayerSpeed = Number(e.target.value);
+            playerSpeedDisplay.textContent = `${currentPlayerSpeed}%`;
+        });
+    }
+    
+    // Win Type
+    document.querySelectorAll('input[name="win-type"]').forEach(radio => {
+        radio.addEventListener('change', (e) => {
+            const winType = e.target.value;
+            currentWinType = winType;
+            const winTypeConfig = WIN_TYPES[winType];
+            
+            if (winTypeConfig.requiresScoreTarget) {
+                scoreSection.classList.remove('hidden');
+                timeSection.classList.add('hidden');
+                
+                if (winType === 'LAST_KNIGHT_STANDING') {
+                    scoreLabel.textContent = 'Score to Win';
+                    scoreUnit.textContent = 'rounds';
+                    scoreDescription.textContent = 'First player to win this many rounds wins the match';
+                } else if (winType === 'KILL_BASED') {
+                    scoreLabel.textContent = 'Kill Target';
+                    scoreUnit.textContent = 'kills';
+                    scoreDescription.textContent = 'First player to reach this many kills wins';
+                }
+            } else if (winTypeConfig.requiresTimeLimit) {
+                scoreSection.classList.add('hidden');
+                timeSection.classList.remove('hidden');
+            }
+        });
+    });
+    
+    // Friendly Fire (Team Mode Only)
+    if (friendlyFireToggle) {
+        friendlyFireToggle.addEventListener('change', (e) => {
+            currentFriendlyFire = e.target.checked;
+        });
+    }
+    
+    // --- INITIALIZATION ---
+    
+    // Set initial values
+    document.getElementById('player-speed-slider').value = currentPlayerSpeed;
+    document.getElementById('player-speed-display').textContent = `${currentPlayerSpeed}%`;
+    
+    // Initialize map selection
+    if (mapSelectEl) {
+        socket.emit('getMaps', (res) => {
+            if (res?.ok) {
+                mapSelectEl.innerHTML = '';
+                res.maps.forEach(m => {
+                    const opt = document.createElement('option');
+                    opt.value = m.id;
+                    opt.textContent = `${m.name} (${m.cols}x${m.rows})`;
+                    mapSelectEl.appendChild(opt);
+                });
+                mapSelectEl.value = currentMapId;
+                const selected = res.maps.find(m => m.id === currentMapId) || res.maps[0];
+                if (selected) {
+                    mapMetaEl.textContent = selected.author ? `by ${selected.author}` : '';
+                    currentMapId = selected.id;
+                    fetchAndPreview(currentMapId);
+                }
+                mapSelectEl.onchange = () => {
+                    const sel = res.maps.find(m => m.id === mapSelectEl.value);
+                    currentMapId = sel?.id || 'classic';
+                    mapMetaEl.textContent = sel?.author ? `by ${sel.author}` : '';
+                    fetchAndPreview(currentMapId);
+                };
+            } else {
+                mapSelectEl.innerHTML = `<option value="classic">Classic Arena</option>`;
+                currentMapId = 'classic';
+                fetchAndPreview(currentMapId);
+            }
+        });
+    }
+    
+    // Initialize win type UI
+    updateUIForWinType(currentWinType);
+    
+    // Initialize score and time displays
+    updateScoreDisplay();
+    updateTimeDisplay();
+    
+    // Initialize speed display
+    updateSpeedDisplay();
 }

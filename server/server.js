@@ -82,7 +82,9 @@ io.on('connection', (socket) => {
             enabledWeapons: Array.isArray(matchSettings?.enabledWeapons) 
                 ? matchSettings.enabledWeapons.filter(w => typeof w === 'string')
                 : ['sword', 'bow', 'shotgun', 'laser', 'minigun', 'grenade'],
-            friendlyFire: matchSettings?.friendlyFire || false
+            friendlyFire: matchSettings?.friendlyFire || false,
+            playerSpeed: matchSettings?.playerSpeed || 100,
+            weaponSpawnRate: matchSettings?.weaponSpawnRate || 100
         };
         
         // Ensure sword is always included
@@ -404,6 +406,14 @@ io.on('connection', (socket) => {
                 // Default to all weapons if not provided
                 next.enabledWeapons = ['sword', 'bow', 'shotgun', 'laser', 'minigun', 'grenade'];
             }
+
+            // Sanitize playerSpeed
+            if (typeof next.playerSpeed !== 'number') next.playerSpeed = Number(next.playerSpeed) || 100;
+            next.playerSpeed = Math.max(100, Math.min(200, next.playerSpeed));
+
+            // Sanitize weaponSpawnRate
+            if (typeof next.weaponSpawnRate !== 'number') next.weaponSpawnRate = Number(next.weaponSpawnRate) || 100;
+            next.weaponSpawnRate = Math.max(100, Math.min(200, next.weaponSpawnRate));
 
             room.matchSettings = next;
             // Broadcast updated settings and lobby state for UI refresh

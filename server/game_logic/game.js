@@ -198,7 +198,11 @@ function resetRound(room) {
 }
 
 function updatePowerups(room) {
-    if (Date.now() > room.lastPowerupTime + POWERUP_SPAWN_DELAY) {
+    // Apply weapon spawn rate multiplier to delay
+    const spawnRateMultiplier = room.matchSettings?.weaponSpawnRate || 100;
+    const adjustedDelay = POWERUP_SPAWN_DELAY / (spawnRateMultiplier / 100);
+    
+    if (Date.now() > room.lastPowerupTime + adjustedDelay) {
         room.lastPowerupTime = Date.now();
         const occupied = room.powerups.map(p => `${p.x}-${p.y}`);
         const available = room.powerupLocations.filter(loc => !occupied.includes(`${loc.x}-${loc.y}`));

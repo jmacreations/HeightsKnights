@@ -69,6 +69,11 @@ function updateKnights(room, deltaTime) {
             speedMultiplier *= (1 + speedBonus);
         }
         
+        // Apply match speed modifier
+        if (room.matchSettings?.playerSpeed) {
+            speedMultiplier *= (room.matchSettings.playerSpeed / 100);
+        }
+        
         const moveX = player.vx * KNIGHT_SPEED * speedMultiplier;
         const moveY = player.vy * KNIGHT_SPEED * speedMultiplier;
         
