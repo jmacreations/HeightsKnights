@@ -1,9 +1,49 @@
 // public/js/ui/uiManager.js
 import { getModeSelectHTML, addModeSelectListeners } from '../scenes/modeSelectScene.js';
 import { getMatchSettingsHTML, addMatchSettingsListeners } from '../scenes/matchSettingsScene.js';
-import { initPlayModeScene } from '../scenes/playModeScene.js';
-import { initControllerSetupScene, cleanupControllerSetupScene } from '../scenes/controllerSetupScene.js';
 import { GAME_MODES, WIN_TYPES } from '../config.js';
+import { localPlayerManager } from '../input/localPlayerManager.js';
+
+// Clipboard helper with fallback
+async function copyToClipboard(text) {
+    try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(text);
+            return true;
+        } else {
+            // Fallback for older browsers
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            textArea.style.position = 'fixed';
+            textArea.style.left = '-999999px';
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            const success = document.execCommand('copy');
+            document.body.removeChild(textArea);
+            return success;
+        }
+    } catch (err) {
+        console.error('Failed to copy:', err);
+        return false;
+    }
+}
+
+// Show temporary notification
+function showNotification(message, duration = 2000) {
+    const notification = document.createElement('div');
+    notification.className = 'fixed top-4 right-4 bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg z-50 animate-fade-in';
+    notification.textContent = message;
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        notification.style.opacity = '0';
+        notification.style.transition = 'opacity 0.3s';
+        setTimeout(() => {
+            document.body.removeChild(notification);
+        }, 300);
+    }, duration);
+}
 
 export function showScreen(screenName) {
     const container = document.getElementById('game-container');
@@ -11,9 +51,10 @@ export function showScreen(screenName) {
     document.getElementById('scoreboard').classList.add('hidden');
     document.getElementById('player-hud').classList.add('hidden');
     
-    // Cleanup previous screen
-    if (uiState === 'CONTROLLER_SETUP') {
-        cleanupControllerSetupScene();
+    // Remove any existing create room button
+    const existingCreateBtn = document.getElementById('create-room-btn-fixed');
+    if (existingCreateBtn) {
+        existingCreateBtn.remove();
     }
     
     uiState = screenName;
@@ -29,22 +70,46 @@ export function showScreen(screenName) {
             <div id="MENU" class="ui-screen flex flex-col items-center justify-center p-8 bg-gray-800 rounded-lg shadow-xl">
                 <h1 class="text-5xl mb-8">SlashDash</h1>
                 <div class="w-full max-w-sm">
-                    <input id="name-input" type="text" placeholder="Enter Your Name" class="input-field w-full mb-4" maxlength="12">
-                    <button id="create-room-btn" class="btn btn-green w-full mb-4">Create Room</button>
-                    <div class="flex items-center gap-2">
-                        <input id="room-code-input" type="text" placeholder="Room Code" class="input-field w-full" maxlength="4">
-                        <button id="join-room-btn" class="btn btn-green flex-shrink-0">Join</button>
-                    </div>
+                    <input id="room-code-input" type="text" placeholder="Enter Room Code" class="input-field w-full mb-4" maxlength="4">
+                    <button id="join-room-btn" class="btn btn-green w-full text-xl py-4">Join Room</button>
                     <p id="menu-error" class="text-red-400 mt-4 text-center h-4"></p>
                 </div>
             </div>`;
-    } else if (screenName === 'PLAY_MODE') {
+        
+        // Add create room button fixed to viewport
+        const createBtn = document.createElement('button');
+        createBtn.id = 'create-room-btn-fixed';
+        createBtn.className = 'fixed top-4 right-4 px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white text-sm rounded transition-colors z-50';
+        createBtn.textContent = '+ Create Room';
+        document.body.appendChild(createBtn);
+    } else if (screenName === 'INPUT_SELECTION') {
+        const isNameEntry = window.inputSelectionState === 'name-entry';
+        const detectedInputType = window.detectedInputType || '';
+        const inputIcon = detectedInputType === 'keyboard' ? '⌨️' : detectedInputType === 'controller' ? '🎮' : '';
+        const prefilledName = window.playerName || '';
+        const joiningRoom = window.joiningRoomCode;
+        
         screenHtml = `
-            <div id="play-mode-screen" class="ui-screen flex flex-col items-center justify-center p-8 bg-gray-800 rounded-lg shadow-xl">
-            </div>`;
-    } else if (screenName === 'CONTROLLER_SETUP') {
-        screenHtml = `
-            <div id="controller-setup-screen" class="ui-screen flex flex-col items-center justify-center p-8 bg-gray-800 rounded-lg shadow-xl max-w-4xl">
+            <div id="INPUT_SELECTION" class="ui-screen flex flex-col items-center justify-center p-8 bg-gray-800 rounded-lg shadow-xl max-w-md">
+                ${joiningRoom ? `<h2 class="text-3xl mb-2">Joining Room</h2><p class="text-2xl font-mono mb-6 text-yellow-400">${joiningRoom}</p>` : '<h2 class="text-3xl mb-6">Setup Player</h2>'}
+                
+                ${!isNameEntry ? `
+                    <div class="text-center">
+                        <p class="text-xl mb-4">Choose your input:</p>
+                        <p class="text-gray-400 text-sm mb-6">Press <span class="text-green-400">ENTER</span> for keyboard</p>
+                        <p class="text-gray-400 text-sm">or <span class="text-blue-400">START</span> on your controller</p>
+                        <div id="input-detection-status" class="mt-6 text-sm text-gray-500">Waiting for input...</div>
+                    </div>
+                ` : `
+                    <div class="w-full text-center">
+                        <div class="text-4xl mb-4">${inputIcon}</div>
+                        <p class="text-gray-400 text-sm mb-4">Input: ${detectedInputType}</p>
+                        <label class="block text-left mb-2">Enter your name:</label>
+                        <input id="player-name-input" type="text" class="input-field w-full mb-4" maxlength="12" value="${prefilledName}" autofocus>
+                        <button id="confirm-name-btn" class="btn btn-green w-full">Continue</button>
+                        <p id="name-error" class="text-red-400 mt-2 text-sm h-4"></p>
+                    </div>
+                `}
             </div>`;
     } else if (screenName === 'MODE_SELECT') {
         screenHtml = getModeSelectHTML(window.playerName);
@@ -74,7 +139,12 @@ export function showScreen(screenName) {
         screenHtml = `
             <div id="LOBBY" class="ui-screen flex flex-col items-center p-8 bg-gray-800 rounded-lg shadow-xl w-[500px]">
                 <h2 class="text-3xl mb-2">LOBBY</h2>
-                <p class="text-2xl font-mono bg-gray-900 px-4 py-2 rounded-md mb-2">${roomCode}</p>
+                <div class="flex items-center gap-2 mb-2">
+                    <p class="text-2xl font-mono bg-gray-900 px-4 py-2 rounded-md">${roomCode}</p>
+                    <button id="share-link-btn" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded text-sm transition-colors" title="Share join link">
+                        📋 Share Link
+                    </button>
+                </div>
                 <div class="text-sm text-gray-400 mb-4 text-center flex items-center gap-3">
                     <div class="text-left">
                         <p>Mode: <span class="text-white">${gameModeName}</span></p>
@@ -86,6 +156,7 @@ export function showScreen(screenName) {
                     <button id="edit-settings-btn" class="hidden bg-gray-700 hover:bg-gray-600 text-white px-3 py-1 rounded text-xs">Edit</button>
                 </div>
                 <div id="player-list" class="flex flex-col items-center w-full gap-2 min-h-[100px]"></div>
+                
                 <button id="start-game-btn" class="btn btn-green w-full mt-6 hidden">Start Game</button>
             </div>`;
     } else if (screenName === 'GAME') {
@@ -106,44 +177,172 @@ export function showScreen(screenName) {
 
     container.innerHTML = screenHtml;
     
-    // Initialize special screens
-    if (screenName === 'PLAY_MODE') {
-        initPlayModeScene(window.playModeContext || 'create');
-    } else if (screenName === 'CONTROLLER_SETUP') {
-        initControllerSetupScene();
-    }
-    
     addEventListeners(screenName);
 }
 
 function addEventListeners(screenName) {
     if (screenName === 'MENU') {
-        document.getElementById('create-room-btn').onclick = () => {
-            const name = document.getElementById('name-input').value.trim();
-            if (!name) {
-                document.getElementById('menu-error').textContent = 'Please enter your name';
-                return;
-            }
-            window.playerName = name;
-            window.playModeContext = 'create';
-            showScreen('PLAY_MODE');
-        };
+        const roomCodeInput = document.getElementById('room-code-input');
+        const createBtn = document.getElementById('create-room-btn-fixed');
+        
+        if (createBtn) {
+            createBtn.onclick = () => {
+                showScreen('MODE_SELECT');
+            };
+        }
+        
         document.getElementById('join-room-btn').onclick = () => {
-            const name = document.getElementById('name-input').value.trim();
-            const code = document.getElementById('room-code-input').value.toUpperCase();
-            if (!name) {
-                document.getElementById('menu-error').textContent = 'Please enter your name';
-                return;
-            }
+            const code = roomCodeInput.value.trim().toUpperCase();
             if (!code) {
                 document.getElementById('menu-error').textContent = 'Please enter room code';
                 return;
             }
-            window.playerName = name;
-            window.playModeContext = 'join';
-            window.pendingRoomCode = code;
-            showScreen('PLAY_MODE');
+            window.joiningRoomCode = code;
+            window.inputSelectionState = null; // Start with input detection
+            showScreen('INPUT_SELECTION');
         };
+        
+        roomCodeInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                document.getElementById('join-room-btn').click();
+            }
+        });
+    } else if (screenName === 'INPUT_SELECTION') {
+        const isNameEntry = window.inputSelectionState === 'name-entry';
+        
+        if (!isNameEntry) {
+            // Input detection phase
+            let inputDetected = false;
+            
+            const handleKeyboard = (e) => {
+                if (inputDetected) return;
+                if (e.key === 'Enter') {
+                    inputDetected = true;
+                    window.detectedInputType = 'keyboard';
+                    window.inputSelectionState = 'name-entry';
+                    cleanup();
+                    showScreen('INPUT_SELECTION');
+                }
+            };
+            
+            const handleGamepad = () => {
+                if (inputDetected) return;
+                const gamepads = navigator.getGamepads();
+                
+                for (let i = 0; i < gamepads.length; i++) {
+                    const gp = gamepads[i];
+                    if (gp && gp.buttons[9] && gp.buttons[9].pressed) { // START button
+                        inputDetected = true;
+                        window.detectedInputType = 'controller';
+                        window.detectedGamepadIndex = i;
+                        window.inputSelectionState = 'name-entry';
+                        cleanup();
+                        showScreen('INPUT_SELECTION');
+                        break;
+                    }
+                }
+                
+                if (!inputDetected) {
+                    window.inputDetectionFrame = requestAnimationFrame(handleGamepad);
+                }
+            };
+            
+            const cleanup = () => {
+                document.removeEventListener('keydown', handleKeyboard);
+                if (window.inputDetectionFrame) {
+                    cancelAnimationFrame(window.inputDetectionFrame);
+                    window.inputDetectionFrame = null;
+                }
+            };
+            
+            document.addEventListener('keydown', handleKeyboard);
+            handleGamepad();
+            
+            // Cleanup on screen change
+            window.addEventListener('uiScreenChange', cleanup, { once: true });
+        } else {
+            // Name entry phase
+            const nameInput = document.getElementById('player-name-input');
+            const confirmBtn = document.getElementById('confirm-name-btn');
+            const errorEl = document.getElementById('name-error');
+            
+            console.log('Name entry phase - elements:', { nameInput, confirmBtn, errorEl });
+            
+            if (!nameInput || !confirmBtn || !errorEl) {
+                console.error('Missing elements in name entry phase!');
+                return;
+            }
+            
+            const confirmName = () => {
+                console.log('Confirm name clicked!');
+                const name = nameInput.value.trim();
+                console.log('Name value:', name);
+                if (!name) {
+                    errorEl.textContent = 'Name is required';
+                    return;
+                }
+                if (name.length > 12) {
+                    errorEl.textContent = 'Name too long (max 12)';
+                    return;
+                }
+                
+                window.playerName = name;
+                
+                console.log('Detected input type:', window.detectedInputType);
+                console.log('Socket ID:', window.socket.id);
+                
+                // Initialize local player with detected input type
+                if (window.detectedInputType === 'keyboard') {
+                    localPlayerManager.addLocalPlayer({
+                        name: name,
+                        inputMethod: 'keyboard',
+                        controllerIndex: null,
+                        socketId: window.socket.id
+                    });
+                } else if (window.detectedInputType === 'controller') {
+                    localPlayerManager.addLocalPlayer({
+                        name: name,
+                        inputMethod: 'gamepad',
+                        controllerIndex: window.detectedGamepadIndex,
+                        socketId: window.socket.id
+                    });
+                }
+                
+                // Check if joining room or creating room
+                if (window.joiningRoomCode) {
+                    // Joining existing room
+                    console.log('Emitting joinRoom with:', { roomCode: window.joiningRoomCode, playerName: name });
+                    window.socket.emit('joinRoom', { 
+                        roomCode: window.joiningRoomCode, 
+                        playerName: name 
+                    });
+                    window.joiningRoomCode = null; // Clear after use
+                } else if (window.pendingRoomSettings) {
+                    // Creating new room
+                    console.log('Emitting createRoom with settings');
+                    window.socket.emit('createRoom', {
+                        playerName: name,
+                        gameMode: window.pendingRoomSettings.gameMode,
+                        matchSettings: window.pendingRoomSettings.matchSettings
+                    });
+                    window.pendingRoomSettings = null;
+                }
+                
+                // Reset state
+                window.inputSelectionState = null;
+                window.detectedInputType = null;
+                window.detectedGamepadIndex = null;
+                
+                // LOBBY screen will be shown by joinSuccess/roomCreated event
+            };
+            
+            confirmBtn.onclick = confirmName;
+            nameInput.onkeydown = (e) => {
+                if (e.key === 'Enter') confirmName();
+            };
+            
+            nameInput.focus();
+        }
     } else if (screenName === 'MODE_SELECT') {
         addModeSelectListeners();
     } else if (screenName === 'MATCH_SETTINGS') {
@@ -153,6 +352,21 @@ function addEventListeners(screenName) {
         if (startGameBtn) {
             startGameBtn.onclick = () => socket.emit('startGame', roomCode);
         }
+        
+        // Share Link button (visible to all players)
+        const shareLinkBtn = document.getElementById('share-link-btn');
+        if (shareLinkBtn) {
+            shareLinkBtn.onclick = async () => {
+                const shareUrl = `${window.location.origin}${window.location.pathname}?room=${roomCode}`;
+                const success = await copyToClipboard(shareUrl);
+                if (success) {
+                    showNotification('Copied to clipboard! 📋');
+                } else {
+                    showNotification('Failed to copy link', 2000);
+                }
+            };
+        }
+        
         // Resolve map name for display
         const mapNameEl = document.getElementById('lobby-map-name');
         if (mapNameEl) {
@@ -173,6 +387,9 @@ function addEventListeners(screenName) {
                 showScreen('MATCH_SETTINGS');
             };
         }
+        
+        // Add Local Player functionality
+        setupAddLocalPlayerUI();
     }
     else if (screenName === 'GAME') {
         const modal = document.getElementById('game-menu-modal');
@@ -252,6 +469,182 @@ function addEventListeners(screenName) {
             if (escHandler) document.removeEventListener('keydown', escHandler);
         }, { once: true });
     }
+}
+
+// Setup Add Local Player UI in lobby
+export function setupAddLocalPlayerUI() {
+    const addPlayerBtn = document.getElementById('add-local-player-btn');
+    const addPlayerPrompt = document.getElementById('add-player-prompt');
+    const addPlayerNameEntry = document.getElementById('add-player-name-entry');
+    const cancelPromptBtn = document.getElementById('cancel-add-player-btn');
+    const addPlayerNameInput = document.getElementById('add-player-name-input');
+    const confirmAddBtn = document.getElementById('confirm-add-player-btn');
+    const cancelNameBtn = document.getElementById('cancel-add-player-name-btn');
+    const addPlayerIcon = document.getElementById('add-player-icon');
+    const errorEl = document.getElementById('add-player-error');
+    
+    // Elements don't exist yet if not in lobby - skip setup
+    if (!addPlayerBtn) return;
+    
+    let inputDetectionFrame = null;
+    let detectedInputType = null;
+    let detectedGamepadIndex = null;
+    
+    // Check if max players reached
+    const updateAddPlayerButton = () => {
+        const localPlayerCount = localPlayerManager.getAllPlayers().length;
+        if (localPlayerCount >= 4) {
+            addPlayerBtn.disabled = true;
+            addPlayerBtn.textContent = 'Max Players Reached (4)';
+            addPlayerBtn.classList.add('opacity-50', 'cursor-not-allowed');
+        } else {
+            addPlayerBtn.disabled = false;
+            addPlayerBtn.textContent = `+ Add Local Player (${localPlayerCount}/4)`;
+            addPlayerBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+        }
+    };
+    
+    updateAddPlayerButton();
+    
+    const resetUI = () => {
+        addPlayerBtn.classList.remove('hidden');
+        addPlayerPrompt.classList.add('hidden');
+        addPlayerNameEntry.classList.add('hidden');
+        errorEl.textContent = '';
+        addPlayerNameInput.value = '';
+        detectedInputType = null;
+        detectedGamepadIndex = null;
+        if (inputDetectionFrame) {
+            cancelAnimationFrame(inputDetectionFrame);
+            inputDetectionFrame = null;
+        }
+    };
+    
+    // Step 1: Show input detection prompt
+    addPlayerBtn.onclick = () => {
+        // Check if keyboard player already exists
+        const existingPlayers = localPlayerManager.getAllPlayers();
+        const hasKeyboardPlayer = existingPlayers.some(p => p.inputMethod === 'keyboard');
+        
+        // Update prompt text if keyboard is already taken
+        const promptText = document.getElementById('add-player-prompt-text');
+        if (hasKeyboardPlayer) {
+            promptText.innerHTML = 'Press <span class="text-blue-400">START</span> on a controller';
+        } else {
+            promptText.innerHTML = 'Press <span class="text-green-400">ENTER</span> (keyboard) or <span class="text-blue-400">START</span> (controller)';
+        }
+        
+        addPlayerBtn.classList.add('hidden');
+        addPlayerPrompt.classList.remove('hidden');
+        startInputDetection(hasKeyboardPlayer);
+    };
+    
+    cancelPromptBtn.onclick = resetUI;
+    
+    // Input detection
+    const startInputDetection = (hasKeyboardPlayer) => {
+        const handleKeyboard = (e) => {
+            if (e.key === 'Enter' && !hasKeyboardPlayer) {
+                detectedInputType = 'keyboard';
+                document.removeEventListener('keydown', handleKeyboard);
+                if (inputDetectionFrame) {
+                    cancelAnimationFrame(inputDetectionFrame);
+                    inputDetectionFrame = null;
+                }
+                showNameEntry();
+            }
+        };
+        
+        const handleGamepad = () => {
+            const gamepads = navigator.getGamepads();
+            
+            for (let i = 0; i < gamepads.length; i++) {
+                const gp = gamepads[i];
+                if (gp && gp.buttons[9] && gp.buttons[9].pressed) { // START button
+                    detectedInputType = 'controller';
+                    detectedGamepadIndex = i;
+                    document.removeEventListener('keydown', handleKeyboard);
+                    if (inputDetectionFrame) {
+                        cancelAnimationFrame(inputDetectionFrame);
+                        inputDetectionFrame = null;
+                    }
+                    showNameEntry();
+                    return;
+                }
+            }
+            
+            inputDetectionFrame = requestAnimationFrame(handleGamepad);
+        };
+        
+        document.addEventListener('keydown', handleKeyboard);
+        handleGamepad();
+    };
+    
+    // Step 2: Show name entry
+    const showNameEntry = () => {
+        addPlayerPrompt.classList.add('hidden');
+        addPlayerNameEntry.classList.remove('hidden');
+        addPlayerIcon.textContent = detectedInputType === 'keyboard' ? '⌨️' : '🎮';
+        addPlayerNameInput.focus();
+    };
+    
+    // Step 3: Confirm and add player
+    const confirmAddPlayer = () => {
+        const name = addPlayerNameInput.value.trim();
+        if (!name) {
+            errorEl.textContent = 'Name is required';
+            return;
+        }
+        if (name.length > 12) {
+            errorEl.textContent = 'Name too long (max 12)';
+            return;
+        }
+        
+        // Add player to local player manager
+        const player = localPlayerManager.addLocalPlayer({
+            name: name,
+            inputMethod: detectedInputType === 'keyboard' ? 'keyboard' : 'gamepad',
+            controllerIndex: detectedInputType === 'keyboard' ? null : detectedGamepadIndex,
+            socketId: window.socket.id
+        });
+        
+        if (!player) {
+            errorEl.textContent = 'Failed to add player';
+            return;
+        }
+        
+        // Register with server
+        const allPlayers = localPlayerManager.getAllPlayers();
+        const playersData = allPlayers.map(p => ({
+            id: p.id,
+            socketId: p.socketId,
+            localIndex: p.localIndex,
+            name: p.name,
+            color: p.color,
+            inputMethod: p.inputMethod,
+            controllerIndex: p.controllerIndex
+        }));
+        
+        window.socket.emit('registerLocalPlayers', {
+            roomCode: window.roomCode,
+            players: playersData
+        });
+        
+        console.log(`Added local player: ${name} (${detectedInputType})`);
+        
+        resetUI();
+        updateAddPlayerButton();
+    };
+    
+    confirmAddBtn.onclick = confirmAddPlayer;
+    cancelNameBtn.onclick = resetUI;
+    addPlayerNameInput.onkeydown = (e) => {
+        if (e.key === 'Enter') confirmAddPlayer();
+        if (e.key === 'Escape') resetUI();
+    };
+    
+    // Cleanup on screen change
+    window.addEventListener('uiScreenChange', resetUI, { once: true });
 }
 
 export function showMessage(text, duration, isMatchOver = false, matchData = null) {

@@ -14,9 +14,25 @@ window.playerName = '';
 window.selectedGameMode = null;
 window.matchSettings = null;
 
+// Parse URL parameters for pre-filled room code
+function getURLRoomCode() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const roomCode = urlParams.get('room');
+    return roomCode ? roomCode.toUpperCase().slice(0, 4) : null;
+}
+
+window.urlRoomCode = getURLRoomCode();
+
 function main() {
     initializeSocket();
-    showScreen('MENU');
+    
+    // If URL has a room code, auto-join by going to INPUT_SELECTION
+    if (window.urlRoomCode) {
+        window.joiningRoomCode = window.urlRoomCode;
+        showScreen('INPUT_SELECTION');
+    } else {
+        showScreen('MENU');
+    }
     
     // Display gamepad connection status
     if (gamepadManager.isConnected()) {

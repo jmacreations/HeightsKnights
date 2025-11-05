@@ -1,6 +1,7 @@
 // public/js/scenes/lobbyScene.js
 import { GAME_MODES } from '../config.js';
 import { localPlayerManager } from '../input/localPlayerManager.js';
+import { setupAddLocalPlayerUI } from '../ui/uiManager.js';
 
 export function updateLobbyUI() {
     if (!gameState.players) return;
@@ -28,20 +29,83 @@ export function updateLobbyUI() {
             playerEl.className = 'bg-gray-700 p-3 rounded-lg mb-2 flex items-center justify-between';
             playerEl.style.color = player.color;
             
+            const leftSection = document.createElement('div');
+            leftSection.className = 'flex items-center gap-2';
+            
             const nameSpan = document.createElement('span');
             nameSpan.textContent = player.name;
             
             const inputLabel = player.inputMethod === 'keyboard' 
                 ? '⌨️' 
-                : `🎮${player.controllerIndex + 1}`;
+                : `🎮`;
             const inputSpan = document.createElement('span');
-            inputSpan.className = 'text-sm text-gray-400';
+            inputSpan.className = 'text-sm';
             inputSpan.textContent = inputLabel;
             
-            playerEl.appendChild(nameSpan);
-            playerEl.appendChild(inputSpan);
+            leftSection.appendChild(inputSpan);
+            leftSection.appendChild(nameSpan);
+            
+            // Remove button (only for additional players, not primary)
+            if (player.localIndex > 0) {
+                const removeBtn = document.createElement('button');
+                removeBtn.className = 'text-red-400 hover:text-red-300 text-xl leading-none';
+                removeBtn.textContent = '×';
+                removeBtn.title = 'Remove player';
+                removeBtn.onclick = () => {
+                    if (confirm(`Remove ${player.name}?`)) {
+                        localPlayerManager.removeLocalPlayer(player.id);
+                        
+                        // Re-register remaining players with server
+                        const remaining = localPlayerManager.getAllPlayers();
+                        window.socket.emit('registerLocalPlayers', {
+                            roomCode: window.roomCode,
+                            players: remaining.map(p => ({
+                                id: p.id,
+                                socketId: p.socketId,
+                                localIndex: p.localIndex,
+                                name: p.name,
+                                color: p.color,
+                                inputMethod: p.inputMethod,
+                                controllerIndex: p.controllerIndex
+                            }))
+                        });
+                        
+                        updateLobbyUI();
+                    }
+                };
+                playerEl.appendChild(leftSection);
+                playerEl.appendChild(removeBtn);
+            } else {
+                playerEl.appendChild(leftSection);
+            }
+            
             localSection.appendChild(playerEl);
         });
+        
+        // Add the "+ Add Local Player" button and controls INSIDE the local section
+        const addPlayerSection = document.createElement('div');
+        addPlayerSection.className = 'w-full mt-3';
+        addPlayerSection.innerHTML = `
+            <button id="add-local-player-btn" class="w-full px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded transition-colors">
+                + Add Local Player
+            </button>
+            <div id="add-player-prompt" class="hidden mt-2 p-4 bg-gray-700 rounded text-center">
+                <p class="text-sm mb-2" id="add-player-prompt-text">Press <span class="text-green-400">ENTER</span> (keyboard) or <span class="text-blue-400">START</span> (controller)</p>
+                <button id="cancel-add-player-btn" class="text-xs text-gray-400 hover:text-white mt-2">Cancel</button>
+            </div>
+            <div id="add-player-name-entry" class="hidden mt-2 p-4 bg-gray-700 rounded">
+                <div class="text-center mb-2">
+                    <span id="add-player-icon" class="text-2xl"></span>
+                </div>
+                <input id="add-player-name-input" type="text" placeholder="Enter name" class="input-field w-full mb-2" maxlength="12">
+                <div class="flex gap-2">
+                    <button id="confirm-add-player-btn" class="btn btn-green flex-1">Add</button>
+                    <button id="cancel-add-player-name-btn" class="btn bg-gray-600 hover:bg-gray-500">Cancel</button>
+                </div>
+                <p id="add-player-error" class="text-red-400 text-xs mt-1 h-4"></p>
+            </div>
+        `;
+        localSection.appendChild(addPlayerSection);
         
         playerList.appendChild(localSection);
         
@@ -55,6 +119,31 @@ export function updateLobbyUI() {
         onlineTitle.className = 'text-2xl font-bold mb-3 text-blue-400';
         onlineTitle.textContent = '🌐 ONLINE PLAYERS';
         playerList.appendChild(onlineTitle);
+    } else {
+        // If no local players yet, still add the button at the top
+        const addPlayerSection = document.createElement('div');
+        addPlayerSection.className = 'w-full mb-4';
+        addPlayerSection.innerHTML = `
+            <button id="add-local-player-btn" class="w-full px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded transition-colors">
+                + Add Local Player
+            </button>
+            <div id="add-player-prompt" class="hidden mt-2 p-4 bg-gray-700 rounded text-center">
+                <p class="text-sm mb-2" id="add-player-prompt-text">Press <span class="text-green-400">ENTER</span> (keyboard) or <span class="text-blue-400">START</span> (controller)</p>
+                <button id="cancel-add-player-btn" class="text-xs text-gray-400 hover:text-white mt-2">Cancel</button>
+            </div>
+            <div id="add-player-name-entry" class="hidden mt-2 p-4 bg-gray-700 rounded">
+                <div class="text-center mb-2">
+                    <span id="add-player-icon" class="text-2xl"></span>
+                </div>
+                <input id="add-player-name-input" type="text" placeholder="Enter name" class="input-field w-full mb-2" maxlength="12">
+                <div class="flex gap-2">
+                    <button id="confirm-add-player-btn" class="btn btn-green flex-1">Add</button>
+                    <button id="cancel-add-player-name-btn" class="btn bg-gray-600 hover:bg-gray-500">Cancel</button>
+                </div>
+                <p id="add-player-error" class="text-red-400 text-xs mt-1 h-4"></p>
+            </div>
+        `;
+        playerList.appendChild(addPlayerSection);
     }
     
     // Show team balancing bonuses if in team mode
@@ -86,7 +175,12 @@ export function updateLobbyUI() {
     for (const id in gameState.players) {
         const player = gameState.players[id];
         let name = player.name;
-        if (id === gameState.hostId) name += " (Host)";
+        
+        // Check if this player is the host (compare socket IDs)
+        const playerSocketId = player.socketId || player.id;
+        if (playerSocketId === gameState.hostId) {
+            name += " (Host)";
+        }
         
         const playerEl = document.createElement('div');
         playerEl.className = 'bg-gray-700 p-3 rounded-lg w-full max-w-md text-center text-lg flex items-center justify-between';
@@ -161,4 +255,7 @@ export function updateLobbyUI() {
             }
         }
     }
+    
+    // Setup add player button listeners after DOM is updated
+    setupAddLocalPlayerUI();
 }

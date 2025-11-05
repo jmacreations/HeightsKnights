@@ -461,25 +461,43 @@ io.on('connection', (socket) => {
             });
 
             const remaining = Object.keys(roomOfDisconnectedPlayer.players).length;
+            
             if (remaining === 0) {
                 delete gameRooms[roomCodeOfDisconnectedPlayer];
                 console.log(`Room ${roomCodeOfDisconnectedPlayer} is empty and has been deleted.`);
             } else {
                 // If the host disconnected, assign a new host
                 if (roomOfDisconnectedPlayer.hostId === socket.id) {
-                    const newHostId = Object.keys(roomOfDisconnectedPlayer.players)[0];
-                    roomOfDisconnectedPlayer.hostId = newHostId;
-                    console.log(`Host disconnected. New host is ${newHostId}`);
+                    // Find a remaining player and use their socket ID as the new host
+                    const remainingPlayers = Object.values(roomOfDisconnectedPlayer.players);
+                    const firstPlayer = remainingPlayers[0];
+                    
+                    // Get the socket ID: for primary players it's their id, for local players it's socketId
+                    const newHostSocketId = firstPlayer.socketId || firstPlayer.id;
+                    roomOfDisconnectedPlayer.hostId = newHostSocketId;
+                    console.log(`Host disconnected. New host is ${newHostSocketId}`);
+                    
+                    // Notify all players of the new host
+                    io.to(roomCodeOfDisconnectedPlayer).emit('hostChanged', { 
+                        newHostId: newHostSocketId,
+                        roomCode: roomCodeOfDisconnectedPlayer
+                    });
                 }
-                // Only return to lobby if only one player remains
-                if (remaining === 1) {
+                
+                // Return to lobby if only ONE PLAYER remains (regardless of client count)
+                // This allows local multiplayer to continue even if the only client has multiple players
+                if (remaining === 1 && (roomOfDisconnectedPlayer.state === 'PLAYING' || roomOfDisconnectedPlayer.state === 'GAME')) {
+                    console.log(`Only 1 player remains - returning to lobby`);
                     // Reset scores when returning to lobby
                     Object.values(roomOfDisconnectedPlayer.players).forEach(p => {
                         p.score = 0;
                     });
                     roomOfDisconnectedPlayer.state = 'LOBBY';
                     if (roomOfDisconnectedPlayer.countdownInterval) { try { clearInterval(roomOfDisconnectedPlayer.countdownInterval); } catch {} }
-                    io.to(roomCodeOfDisconnectedPlayer).emit('returnToLobby', roomOfDisconnectedPlayer);
+                    io.to(roomCodeOfDisconnectedPlayer).emit('returnToLobby', { 
+                        ...roomOfDisconnectedPlayer,
+                        roomCode: roomCodeOfDisconnectedPlayer
+                    });
                 } else {
                     // Otherwise, continue the match; lobby UI can be refreshed if needed
                     io.to(roomCodeOfDisconnectedPlayer).emit('updateLobby', roomOfDisconnectedPlayer);

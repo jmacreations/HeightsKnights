@@ -402,8 +402,14 @@ export function addMatchSettingsListeners() {
                 }
             });
         } else {
-            // Create room with settings
-            socket.emit('createRoom', { playerName, gameMode, matchSettings: window.matchSettings });
+            // Store settings and go to INPUT_SELECTION before creating room
+            window.pendingRoomSettings = {
+                playerName: playerName,
+                gameMode: gameMode,
+                matchSettings: window.matchSettings
+            };
+            window.inputSelectionState = null; // Start with input detection
+            showScreen('INPUT_SELECTION');
         }
     };
     
@@ -541,8 +547,9 @@ export function addMatchSettingsListeners() {
     // --- INITIALIZATION ---
     
     // Set initial values
-    document.getElementById('player-speed-slider').value = currentPlayerSpeed;
-    document.getElementById('player-speed-display').textContent = `${currentPlayerSpeed}%`;
+    if (playerSpeedSelect) {
+        playerSpeedSelect.value = currentPlayerSpeed;
+    }
     
     // Initialize map selection
     if (mapSelectEl) {
@@ -582,7 +589,4 @@ export function addMatchSettingsListeners() {
     // Initialize score and time displays
     updateScoreDisplay();
     updateTimeDisplay();
-    
-    // Initialize speed display
-    updateSpeedDisplay();
 }

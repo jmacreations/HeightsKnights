@@ -41,8 +41,20 @@ export function initializeSocket() {
 
     socket.on('returnToLobby', (updatedState) => {
         gameState = updatedState;
+        window.roomCode = updatedState.roomCode || window.roomCode; // Preserve room code
         showScreen('LOBBY');
         updateLobbyUI();
+    });
+    
+    socket.on('hostChanged', ({ newHostId, roomCode }) => {
+        console.log(`New host: ${newHostId}`);
+        if (gameState.hostId !== undefined) {
+            gameState.hostId = newHostId;
+        }
+        window.roomCode = roomCode; // Make sure room code is preserved
+        if (uiState === 'LOBBY') {
+            updateLobbyUI();
+        }
     });
 
     // Settings updated while in lobby

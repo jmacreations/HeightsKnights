@@ -331,7 +331,6 @@ function draw() {
         // Show charge indicators for local players
         if (isLocalPlayer) {
             if (p.bowChargeStartTime > 0) {
-                console.log('Bow charging:', p.bowChargeStartTime, 'now:', now, 'diff:', now - p.bowChargeStartTime);
                 const chargeAmount = Math.min(1, (now - p.bowChargeStartTime) / 500);
                 ctx.fillStyle = `rgba(250, 204, 21, ${0.3 + chargeAmount * 0.4})`;
                 ctx.beginPath(); ctx.arc(0, 0, KNIGHT_RADIUS + 5 + (chargeAmount * 5), 0, 2*Math.PI); ctx.fill();
@@ -339,7 +338,6 @@ function draw() {
             
             // Draw grenade charge indicator
             if (p.grenadeChargeStartTime > 0) {
-                console.log('Grenade charging:', p.grenadeChargeStartTime, 'now:', now, 'diff:', now - p.grenadeChargeStartTime);
                 const chargeAmount = Math.min(1, (now - p.grenadeChargeStartTime) / 1000);
                 ctx.fillStyle = `rgba(34, 197, 94, ${0.3 + chargeAmount * 0.4})`;
                 ctx.beginPath(); ctx.arc(0, 0, KNIGHT_RADIUS + 5 + (chargeAmount * 5), 0, 2*Math.PI); ctx.fill();
