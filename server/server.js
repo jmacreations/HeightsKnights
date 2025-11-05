@@ -81,7 +81,7 @@ io.on('connection', (socket) => {
             mapId: (matchSettings?.mapId && getMapById(matchSettings.mapId)?.id) || 'classic',
             enabledWeapons: Array.isArray(matchSettings?.enabledWeapons) 
                 ? matchSettings.enabledWeapons.filter(w => typeof w === 'string')
-                : ['sword', 'bow', 'shotgun', 'laser', 'minigun', 'grenade'],
+                : ['sword', 'bow', 'shotgun', 'laser', 'minigun', 'grenade', 'mine'],
             friendlyFire: matchSettings?.friendlyFire || false,
             playerSpeed: matchSettings?.playerSpeed || 100,
             weaponSpawnRate: matchSettings?.weaponSpawnRate || 100
@@ -404,7 +404,7 @@ io.on('connection', (socket) => {
                 }
             } else {
                 // Default to all weapons if not provided
-                next.enabledWeapons = ['sword', 'bow', 'shotgun', 'laser', 'minigun', 'grenade'];
+                next.enabledWeapons = ['sword', 'bow', 'shotgun', 'laser', 'minigun', 'grenade', 'mine'];
             }
 
             // Sanitize playerSpeed

@@ -204,6 +204,47 @@ function draw() {
         ctx.fillStyle = WEAPONS_CONFIG[p.type]?.color || 'white';
         ctx.beginPath(); ctx.arc(p.x, p.y, 15, 0, Math.PI*2); ctx.fill();
     });
+    
+    // Draw mines (before players so they appear below)
+    gameState.mines?.forEach(mine => {
+        const radius = 10;
+        const isArmed = now >= mine.armedTime;
+        const fuseProgress = mine.triggered ? (now - (mine.explodeTime - 300)) / 300 : 0;
+        
+        // Draw mine body
+        ctx.fillStyle = mine.triggered ? '#ef4444' : (isArmed ? '#fbbf24' : '#9ca3af');
+        ctx.beginPath();
+        ctx.arc(mine.x, mine.y, radius, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Draw spikes/details
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 2;
+        for (let i = 0; i < 8; i++) {
+            const angle = (Math.PI * 2 / 8) * i;
+            const x1 = mine.x + Math.cos(angle) * radius;
+            const y1 = mine.y + Math.sin(angle) * radius;
+            const x2 = mine.x + Math.cos(angle) * (radius + 5);
+            const y2 = mine.y + Math.sin(angle) * (radius + 5);
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
+            ctx.stroke();
+        }
+        
+        // If triggered, show danger indicator
+        if (mine.triggered) {
+            ctx.strokeStyle = '#ef4444';
+            ctx.lineWidth = 3;
+            const pulseRadius = radius + 5 + (fuseProgress * 10);
+            ctx.beginPath();
+            ctx.arc(mine.x, mine.y, pulseRadius, 0, Math.PI * 2);
+            ctx.globalAlpha = 1 - fuseProgress;
+            ctx.stroke();
+            ctx.globalAlpha = 1;
+        }
+    });
+    
     gameState.laserBeams?.forEach(beam => {
         const age = now - beam.startTime;
         if (age > 500) return;
@@ -290,15 +331,17 @@ function draw() {
         // Show charge indicators for local players
         if (isLocalPlayer) {
             if (p.bowChargeStartTime > 0) {
+                console.log('Bow charging:', p.bowChargeStartTime, 'now:', now, 'diff:', now - p.bowChargeStartTime);
                 const chargeAmount = Math.min(1, (now - p.bowChargeStartTime) / 500);
-                ctx.fillStyle = `rgba(250, 204, 21, ${chargeAmount * 0.5})`;
+                ctx.fillStyle = `rgba(250, 204, 21, ${0.3 + chargeAmount * 0.4})`;
                 ctx.beginPath(); ctx.arc(0, 0, KNIGHT_RADIUS + 5 + (chargeAmount * 5), 0, 2*Math.PI); ctx.fill();
             }
             
             // Draw grenade charge indicator
             if (p.grenadeChargeStartTime > 0) {
+                console.log('Grenade charging:', p.grenadeChargeStartTime, 'now:', now, 'diff:', now - p.grenadeChargeStartTime);
                 const chargeAmount = Math.min(1, (now - p.grenadeChargeStartTime) / 1000);
-                ctx.fillStyle = `rgba(34, 197, 94, ${chargeAmount * 0.5})`;
+                ctx.fillStyle = `rgba(34, 197, 94, ${0.3 + chargeAmount * 0.4})`;
                 ctx.beginPath(); ctx.arc(0, 0, KNIGHT_RADIUS + 5 + (chargeAmount * 5), 0, 2*Math.PI); ctx.fill();
                 
                 // Draw throw trajectory arc
@@ -306,7 +349,7 @@ function draw() {
                 ctx.moveTo(0, 0);
                 const throwDistance = 100 + (chargeAmount * 200); // Visual only
                 ctx.lineTo(Math.cos(p.angle) * throwDistance, Math.sin(p.angle) * throwDistance);
-                ctx.strokeStyle = `rgba(34, 197, 94, ${chargeAmount * 0.3})`;
+                ctx.strokeStyle = `rgba(34, 197, 94, ${0.5 + chargeAmount * 0.3})`;
                 ctx.lineWidth = 2;
                 ctx.setLineDash([5, 5]);
                 ctx.stroke();
@@ -419,7 +462,7 @@ function draw() {
             ctx.stroke();
         }
     });
-
+    
     gameState.swordSlashes?.forEach(slash => {
             const owner = gameState.players[slash.ownerId];
             if(!owner) return;

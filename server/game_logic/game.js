@@ -4,7 +4,7 @@ const { SCORE_TO_WIN, POWERUP_SPAWN_DELAY, POWERUP_DROP_TABLE, WALL_SIZE, WALL_H
 const { getMapById } = require('../utils/maps');
 const { updateKnights } = require('./player');
 const { updateProjectiles } = require('./projectiles');
-const { updateLasers, updateSwordSlashes } = require('./weapons');
+const { updateLasers, updateSwordSlashes, updateMines } = require('./weapons');
 
 function createNewRoom(hostId, roomCode, playerName, availableColors) {
     const { createNewPlayer } = require('./player');
@@ -12,7 +12,7 @@ function createNewRoom(hostId, roomCode, playerName, availableColors) {
     const room = {
         players: { [hostId]: player }, hostId: hostId, state: 'LOBBY', lastUpdateTime: Date.now(),
         walls: [], wallIdCounter: 0, destroyedWalls: [], // Track destroyed walls for respawn
-        projectiles: [], powerups: [], swordSlashes: [], laserBeams: [],
+        projectiles: [], powerups: [], swordSlashes: [], laserBeams: [], mines: [],
         powerupLocations: [], spawnPoints: [], lastPowerupTime: 0, roundWinner: null,
         teams: [
             { id: 'red', name: 'Red Team', color: '#ff4444', score: 0, players: [] },
@@ -138,6 +138,9 @@ function resetRound(room) {
             player.isInvulnerable = true;
             player.invulnerableUntil = 0; // Will be set when match actually starts
             player.respawnTime = 0;
+            player.bowChargeStartTime = 0;
+            player.grenadeChargeStartTime = 0;
+            player.laserChargeTime = 0;
         });
     } else {
         // Random spawn point assignments for individual mode
@@ -154,12 +157,16 @@ function resetRound(room) {
             player.isInvulnerable = true;
             player.invulnerableUntil = 0; // Will be set when match actually starts
             player.respawnTime = 0;
+            player.bowChargeStartTime = 0;
+            player.grenadeChargeStartTime = 0;
+            player.laserChargeTime = 0;
         });
     }
 
     room.projectiles = [];
     room.swordSlashes = [];
     room.laserBeams = [];
+    room.mines = [];
     room.powerups = [];
     room.lastPowerupTime = Date.now();
     
@@ -254,6 +261,17 @@ function updateWallRespawns(room) {
                 y: dWall.y + WALL_SIZE / 2
             };
             
+            // Check if there's a mine on this wall location
+            const mineOnWall = room.mines.some(mine => {
+                const dist = getDistance(mine, wallCenter);
+                return dist < WALL_SIZE;
+            });
+            
+            // If mine is present, prevent respawn
+            if (mineOnWall) {
+                continue;
+            }
+            
             // Check if any player is near the wall
             let playerNearby = false;
             for (const player of Object.values(room.players)) {
@@ -329,6 +347,9 @@ function respawnPlayer(player, room) {
     player.isInvulnerable = true;
     player.invulnerableUntil = now + INVULNERABILITY_DURATION;
     player.respawnTime = 0;
+    player.bowChargeStartTime = 0;
+    player.grenadeChargeStartTime = 0;
+    player.laserChargeTime = 0;
 }
 
 function handleAutoRespawn(room) {
@@ -376,6 +397,7 @@ function gameLoop(room, deltaTime) {
     updateKnights(room, deltaTime);
     updateProjectiles(room);
     updateSwordSlashes(room);
+    updateMines(room);
     updatePowerups(room);
     updateWallRespawns(room); // Check for wall respawns
     

@@ -84,6 +84,20 @@ function attack(player, room) {
     } else if (weapon.type === 'minigun') {
         const angle = player.angle + (Math.random() - 0.5) * 0.2;
         createProjectile(player, room, angle, 12, weapon.type);
+    } else if (weapon.type === 'mine') {
+        // Place mine at player's position
+        const mineX = player.x + Math.cos(player.angle) * 30; // Place slightly in front
+        const mineY = player.y + Math.sin(player.angle) * 30;
+        room.mines.push({
+            x: mineX,
+            y: mineY,
+            ownerId: player.id,
+            ownerName: player.name,
+            placedTime: now,
+            armedTime: now + WEAPONS.mine.armTime,
+            triggered: false,
+            explodeTime: 0
+        });
     }
 
     if (weapon.ammo === 0) player.weapon = { ...WEAPONS.sword };
@@ -188,4 +202,47 @@ function updateSwordSlashes(room){
      }
 }
 
-module.exports = { handleAttackStart, handleAttackEnd, updateLasers, updateSwordSlashes };
+function updateMines(room) {
+    const now = Date.now();
+    
+    // Check each mine
+    for (let i = room.mines.length - 1; i >= 0; i--) {
+        const mine = room.mines[i];
+        
+        // If mine is triggered and fuse is complete, explode
+        if (mine.triggered && now >= mine.explodeTime) {
+            // Explosion damage to players
+            Object.values(room.players).forEach(p => {
+                if (!p.isAlive) return;
+                const dist = getDistance(mine, p);
+                if (dist < WEAPONS.mine.explosionRadius) {
+                    // If owner triggered their own mine, don't give credit
+                    if (p.id === mine.ownerId) {
+                        handlePlayerHit(p, null, null, room);
+                    } else {
+                        handlePlayerHit(p, mine.ownerId, mine.ownerName, room);
+                    }
+                }
+            });
+            
+            // Remove mine after explosion
+            room.mines.splice(i, 1);
+            continue;
+        }
+        
+        // If not yet triggered, check if mine is armed
+        if (!mine.triggered && now >= mine.armedTime) {
+            // Check for nearby players (including owner once armed)
+            Object.values(room.players).forEach(p => {
+                if (!p.isAlive) return;
+                const dist = getDistance(mine, p);
+                if (dist < WEAPONS.mine.triggerRadius) {
+                    mine.triggered = true;
+                    mine.explodeTime = now + WEAPONS.mine.fuseTime;
+                }
+            });
+        }
+    }
+}
+
+module.exports = { handleAttackStart, handleAttackEnd, updateLasers, updateSwordSlashes, updateMines };

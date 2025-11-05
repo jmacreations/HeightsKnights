@@ -61,6 +61,7 @@ export const WEAPONS_CONFIG = {
     laser: { name: 'Laser', color: '#f87171', ammo: 2 },
     minigun: { name: 'Minigun', color: '#9ca3af', ammo: 60 },
     grenade: { name: 'Grenade', color: '#22c55e', ammo: 3 },
+    mine: { name: 'Mine', color: '#ef4444', ammo: 1 },
     shield: { name: 'Shield', color: '#38bdf8' }
 };
 

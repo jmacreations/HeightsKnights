@@ -504,16 +504,6 @@ export function addMatchSettingsListeners() {
     
     // --- EVENT LISTENERS ---
     
-    // Player Speed
-    if (playerSpeedSlider) {
-        playerSpeedSlider.value = currentPlayerSpeed;
-        playerSpeedDisplay.textContent = `${currentPlayerSpeed}%`;
-        playerSpeedSlider.addEventListener('input', (e) => {
-            currentPlayerSpeed = Number(e.target.value);
-            playerSpeedDisplay.textContent = `${currentPlayerSpeed}%`;
-        });
-    }
-    
     // Win Type
     document.querySelectorAll('input[name="win-type"]').forEach(radio => {
         radio.addEventListener('change', (e) => {

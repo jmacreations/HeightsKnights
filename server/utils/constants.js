@@ -19,12 +19,13 @@ const WEAPONS = {
     shotgun: { type: 'shotgun', cooldown: 800, count: 5, spread: 0.5, recoil: 10, ammo: 6 },
     laser: { type: 'laser', cooldown: 2000, chargeTime: 800, ammo: 2 },
     minigun: { type: 'minigun', cooldown: 80, speedPenalty: 0.8, ammo: 30 },
-    grenade: { type: 'grenade', cooldown: 1000, ammo: 3, fuseTime: 1000, explosionRadius: 80, bounceDecay: 0.7 }
+    grenade: { type: 'grenade', cooldown: 1000, ammo: 3, fuseTime: 1000, explosionRadius: 80, bounceDecay: 0.7 },
+    mine: { type: 'mine', cooldown: 500, ammo: 1, triggerRadius: 50, fuseTime: 300, explosionRadius: 80, armTime: 1000 }
 };
 
 const POWERUP_SPAWN_DELAY = 10000;
-const POWERUP_TYPES = ['bow', 'shotgun', 'laser', 'minigun', 'grenade', 'shield'];
-const POWERUP_DROP_RATES_RAW = { bow: 20, shotgun: 35, laser: 5, minigun: 10, grenade: 15, shield: 20 };
+const POWERUP_TYPES = ['bow', 'shotgun', 'laser', 'minigun', 'grenade', 'mine', 'shield'];
+const POWERUP_DROP_RATES_RAW = { bow: 20, shotgun: 35, laser: 5, minigun: 10, grenade: 15, mine: 10, shield: 20 };
 const POWERUP_DROP_TABLE = [];
 for (const type in POWERUP_DROP_RATES_RAW) {
     for (let i = 0; i < POWERUP_DROP_RATES_RAW[type]; i++) {
