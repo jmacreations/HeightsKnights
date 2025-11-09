@@ -539,4 +539,80 @@ server.listen(PORT, '0.0.0.0', () => {
     }
     console.log(`\nGame available at: http://${localIp}:${PORT}`);
     console.log(`Open this on other devices on the same Wi-Fi network to join!`);
+    console.log(`\nServer Commands:`);
+    console.log(`  setHost <roomCode> <playerId> - Set a new host for a room`);
+    console.log(`  listRooms - List all active rooms`);
+});
+
+// CLI Command Handler
+const readline = require('readline');
+const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+    prompt: ''
+});
+
+rl.on('line', (line) => {
+    const args = line.trim().split(' ');
+    const command = args[0];
+
+    if (command === 'setHost') {
+        const roomCode = args[1]?.toUpperCase();
+        const playerId = args[2];
+        
+        if (!roomCode || !playerId) {
+            console.log('Usage: setHost <roomCode> <playerId>');
+            return;
+        }
+        
+        const room = gameRooms[roomCode];
+        if (!room) {
+            console.log(`Error: Room ${roomCode} not found`);
+            return;
+        }
+        
+        const player = room.players[playerId];
+        if (!player) {
+            console.log(`Error: Player ${playerId} not found in room ${roomCode}`);
+            console.log(`Available players:`, Object.keys(room.players).join(', '));
+            return;
+        }
+        
+        const oldHostId = room.hostId;
+        const newHostSocketId = player.socketId || player.id;
+        room.hostId = newHostSocketId;
+        
+        console.log(`✓ Host changed from ${oldHostId} to ${newHostSocketId} (${player.name}) in room ${roomCode}`);
+        
+        // Notify all players in the room
+        io.to(roomCode).emit('hostChanged', { 
+            newHostId: newHostSocketId,
+            roomCode: roomCode
+        });
+        
+    } else if (command === 'listRooms') {
+        if (Object.keys(gameRooms).length === 0) {
+            console.log('No active rooms');
+            return;
+        }
+        
+        console.log('\nActive Rooms:');
+        for (const [code, room] of Object.entries(gameRooms)) {
+            const playerCount = Object.keys(room.players).length;
+            const hostPlayer = Object.values(room.players).find(p => 
+                (p.socketId || p.id) === room.hostId
+            );
+            console.log(`  ${code} - ${playerCount} player(s), State: ${room.state}, Host: ${hostPlayer?.name || 'Unknown'} (${room.hostId})`);
+            console.log(`    Players: ${Object.entries(room.players).map(([id, p]) => `${p.name} (${id})`).join(', ')}`);
+        }
+        
+    } else if (command === 'help') {
+        console.log('\nAvailable Commands:');
+        console.log('  setHost <roomCode> <playerId> - Set a new host for a room');
+        console.log('  listRooms - List all active rooms with players');
+        console.log('  help - Show this help message');
+        
+    } else if (command) {
+        console.log(`Unknown command: ${command}. Type 'help' for available commands.`);
+    }
 });
