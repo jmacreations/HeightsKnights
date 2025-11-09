@@ -358,23 +358,29 @@ function draw() {
         ctx.fillStyle = p.color;
         ctx.beginPath(); ctx.arc(0, 0, KNIGHT_RADIUS, 0, Math.PI * 2); ctx.fill();
         
-        // Draw team indicator for teammates
+        // Draw team indicator (only for non-local players in team mode)
         const isTeamMode = gameState.matchSettings?.playType === 'team';
-        if (isTeamMode && p.teamId && p.id !== myId) {
-            const myTeamId = gameState.players[myId]?.teamId;
-            if (myTeamId && p.teamId === myTeamId) {
-                // Teammate - draw green border
-                ctx.strokeStyle = '#22c55e';
-                ctx.lineWidth = 3;
+        if (isTeamMode && p.teamId && !isLocalPlayer) {
+            // Find the team object to get its color
+            const team = gameState.teams?.find(t => t.id === p.teamId);
+            if (team) {
+                // Get local player's team to determine if this is teammate or enemy
+                const localPlayers = localPlayerManager.getAllPlayers();
+                let myTeamId = null;
+                
+                if (localPlayers.length > 0) {
+                    const firstLocalPlayer = gameState.players[localPlayers[0].id];
+                    myTeamId = firstLocalPlayer?.teamId;
+                } else {
+                    myTeamId = gameState.players[myId]?.teamId;
+                }
+                
+                // Draw ring with team color
+                ctx.strokeStyle = team.color;
+                // Thicker ring for teammates, thinner for enemies
+                ctx.lineWidth = (myTeamId && p.teamId === myTeamId) ? 3 : 2;
                 ctx.beginPath();
                 ctx.arc(0, 0, KNIGHT_RADIUS + 3, 0, Math.PI * 2);
-                ctx.stroke();
-            } else {
-                // Enemy - draw red border
-                ctx.strokeStyle = '#ef4444';
-                ctx.lineWidth = 2;
-                ctx.beginPath();
-                ctx.arc(0, 0, KNIGHT_RADIUS + 2, 0, Math.PI * 2);
                 ctx.stroke();
             }
         }
@@ -491,11 +497,13 @@ function resizeCanvas(){
     const defaultHeight = 14 * WALL_SIZE;
     const mapPixelWidth = (typeof gameState?.mapWidth === 'number' && gameState.mapWidth > 0) ? gameState.mapWidth : defaultWidth;
     const mapPixelHeight = (typeof gameState?.mapHeight === 'number' && gameState.mapHeight > 0) ? gameState.mapHeight : defaultHeight;
-    const scoreboard = document.getElementById('scoreboard');
-    const hud = document.getElementById('player-hud');
-    const scoreboardHeight = scoreboard?.offsetHeight || 0;
-    const hudHeight = hud?.offsetHeight || 0;
-    const availableHeight = window.innerHeight - (scoreboardHeight + hudHeight + 40); // Extra padding
+    
+    // Use fixed heights to prevent canvas jumping (matches CSS)
+    const SCOREBOARD_HEIGHT = 80;
+    const HUD_HEIGHT = 100;
+    const PADDING = 20;
+    
+    const availableHeight = window.innerHeight - (SCOREBOARD_HEIGHT + HUD_HEIGHT + PADDING);
     const availableWidth = window.innerWidth;
     let scale = Math.min(availableWidth / mapPixelWidth, availableHeight / mapPixelHeight);
     if(gameCanvas) {

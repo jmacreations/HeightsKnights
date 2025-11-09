@@ -40,10 +40,49 @@ export function initializeSocket() {
     });
 
     socket.on('returnToLobby', (updatedState) => {
-        gameState = updatedState;
+        console.log('Returning to lobby...', updatedState);
+        
+        // Clear game state entities
+        gameState = {
+            ...updatedState,
+            walls: [],
+            projectiles: [],
+            powerups: [],
+            swordSlashes: [],
+            laserBeams: [],
+            mines: [],
+            explosions: [],
+            destroyedWalls: []
+        };
+        
         window.roomCode = updatedState.roomCode || window.roomCode; // Preserve room code
+        window.gameState = gameState; // Update global reference
+        
+        // Switch to lobby screen
         showScreen('LOBBY');
         updateLobbyUI();
+    });
+    
+    socket.on('playerJoined', ({ players, teams, hostId }) => {
+        gameState.players = players;
+        gameState.teams = teams;
+        gameState.hostId = hostId;
+        if (uiState === 'LOBBY') {
+            updateLobbyUI();
+        }
+    });
+    
+    socket.on('playerLeft', ({ playerId, players, teams, hostId }) => {
+        gameState.players = players;
+        gameState.teams = teams;
+        gameState.hostId = hostId;
+        if (uiState === 'LOBBY') {
+            updateLobbyUI();
+        }
+    });
+    
+    socket.on('botError', (message) => {
+        alert(`Bot Error: ${message}`);
     });
     
     socket.on('hostChanged', ({ newHostId, roomCode }) => {

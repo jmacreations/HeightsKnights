@@ -5,6 +5,47 @@ const { getMapById } = require('../utils/maps');
 const { updateKnights } = require('./player');
 const { updateProjectiles } = require('./projectiles');
 const { updateLasers, updateSwordSlashes, updateMines } = require('./weapons');
+const { updateBots } = require('./bot_ai');
+
+// Sanitize players object to remove circular refs from bot AI state
+function sanitizePlayers(players) {
+    const sanitized = {};
+    for (const id in players) {
+        const player = players[id];
+        sanitized[id] = {
+            id: player.id,
+            name: player.name,
+            color: player.color,
+            x: player.x,
+            y: player.y,
+            vx: player.vx,
+            vy: player.vy,
+            angle: player.angle,
+            isAlive: player.isAlive,
+            score: player.score,
+            weapon: player.weapon,
+            isLunging: player.isLunging,
+            lungeEndTime: player.lungeEndTime,
+            lastLungeTime: player.lastLungeTime,
+            hasShield: player.hasShield,
+            shieldActive: player.shieldActive,
+            shieldEnergy: player.shieldEnergy,
+            bowChargeStartTime: player.bowChargeStartTime,
+            grenadeChargeStartTime: player.grenadeChargeStartTime,
+            laserChargeTime: player.laserChargeTime,
+            parryEndTime: player.parryEndTime,
+            isInvulnerable: player.isInvulnerable,
+            invulnerableUntil: player.invulnerableUntil,
+            respawnTime: player.respawnTime,
+            teamId: player.teamId,
+            socketId: player.socketId,
+            isAI: player.isAI,
+            aiDifficulty: player.aiDifficulty
+            // Exclude: aiState, aiTarget, aiMemory, aiDecisionTimer, etc.
+        };
+    }
+    return sanitized;
+}
 
 function createNewRoom(hostId, roomCode, playerName, availableColors) {
     const { createNewPlayer } = require('./player');
@@ -90,78 +131,40 @@ function resetRound(room) {
         }
     });
 
-    // Spawn point assignments
+    // Spawn point assignments - always use unique spawn points for each player
     const INVULNERABILITY_DURATION = 1500; // 1.5 seconds
     
-    if (room.matchSettings?.playType === 'team') {
-        // Team-based spawning: try to spawn near teammates, away from enemies
-        Object.values(room.players).forEach(player => {
-            let bestSpawn = null;
-            let bestScore = -Infinity;
-            
-            room.spawnPoints.forEach(spawn => {
-                let score = 0;
-                
-                // Check distance to teammates (prefer closer)
-                Object.values(room.players).forEach(other => {
-                    if (other.teamId === player.teamId && other !== player) {
-                        const dist = Math.sqrt((spawn.x - other.x) ** 2 + (spawn.y - other.y) ** 2);
-                        score += Math.max(0, 200 - dist); // Bonus for being near teammates
-                    }
-                });
-                
-                // Check distance to enemies (prefer farther)
-                Object.values(room.players).forEach(other => {
-                    if (other.teamId !== player.teamId) {
-                        const dist = Math.sqrt((spawn.x - other.x) ** 2 + (spawn.y - other.y) ** 2);
-                        score += Math.min(100, dist); // Bonus for being away from enemies
-                    }
-                });
-                
-                if (score > bestScore) {
-                    bestScore = score;
-                    bestSpawn = spawn;
-                }
-            });
-            
-            // Fallback to random if no good spawn found
-            if (!bestSpawn) {
-                bestSpawn = room.spawnPoints[Math.floor(Math.random() * room.spawnPoints.length)];
-            }
-            
-            player.x = bestSpawn.x;
-            player.y = bestSpawn.y;
-            player.isAlive = true;
-            player.weapon = { ...WEAPONS.sword };
-            player.hasShield = false;
-            player.shieldEnergy = 0;
-            player.isInvulnerable = true;
-            player.invulnerableUntil = 0; // Will be set when match actually starts
-            player.respawnTime = 0;
-            player.bowChargeStartTime = 0;
-            player.grenadeChargeStartTime = 0;
-            player.laserChargeTime = 0;
-        });
-    } else {
-        // Random spawn point assignments for individual mode
-        const shuffledSpawnPoints = [...room.spawnPoints].sort(() => Math.random() - 0.5);
+    // Shuffle spawn points to randomize starting positions
+    const shuffledSpawnPoints = [...room.spawnPoints].sort(() => Math.random() - 0.5);
+    const usedSpawnIndices = new Set(); // Track which spawns have been used
+    
+    Object.values(room.players).forEach((player, playerIndex) => {
+        // Find an unused spawn point
+        let spawnIndex = playerIndex % shuffledSpawnPoints.length;
+        let attempts = 0;
         
-        Object.values(room.players).forEach((player, index) => {
-            const spawnPoint = shuffledSpawnPoints[index % shuffledSpawnPoints.length];
-            player.x = spawnPoint.x;
-            player.y = spawnPoint.y;
-            player.isAlive = true;
-            player.weapon = { ...WEAPONS.sword };
-            player.hasShield = false;
-            player.shieldEnergy = 0;
-            player.isInvulnerable = true;
-            player.invulnerableUntil = 0; // Will be set when match actually starts
-            player.respawnTime = 0;
-            player.bowChargeStartTime = 0;
-            player.grenadeChargeStartTime = 0;
-            player.laserChargeTime = 0;
-        });
-    }
+        // Keep looking for an unused spawn (in case we have more players than spawns)
+        while (usedSpawnIndices.has(spawnIndex) && attempts < shuffledSpawnPoints.length) {
+            spawnIndex = (spawnIndex + 1) % shuffledSpawnPoints.length;
+            attempts++;
+        }
+        
+        usedSpawnIndices.add(spawnIndex);
+        const spawnPoint = shuffledSpawnPoints[spawnIndex];
+        
+        player.x = spawnPoint.x;
+        player.y = spawnPoint.y;
+        player.isAlive = true;
+        player.weapon = { ...WEAPONS.sword };
+        player.hasShield = false;
+        player.shieldEnergy = 0;
+        player.isInvulnerable = true;
+        player.invulnerableUntil = 0; // Will be set when match actually starts
+        player.respawnTime = 0;
+        player.bowChargeStartTime = 0;
+        player.grenadeChargeStartTime = 0;
+        player.laserChargeTime = 0;
+    });
 
     room.projectiles = [];
     room.swordSlashes = [];
@@ -307,35 +310,36 @@ function respawnPlayer(player, room) {
     const INVULNERABILITY_DURATION = 1500; // 1.5 seconds
     const now = Date.now();
     
-    // Find spawn point
-    let spawnPoint;
+    // Find spawn point - always use random individual spawn points
+    // This ensures players don't cluster at the same location
+    const shuffledSpawnPoints = [...room.spawnPoints].sort(() => Math.random() - 0.5);
+    
+    // In team mode, prefer spawn points that are:
+    // 1. Not currently occupied by an enemy
+    // 2. Not too close to enemies (avoid spawn camping)
+    let spawnPoint = shuffledSpawnPoints[0];
+    
     if (room.matchSettings?.playType === 'team' && player.teamId) {
-        // Team-based respawning: try to spawn near teammates
-        let bestSpawn = null;
-        let bestScore = -Infinity;
-        
-        room.spawnPoints.forEach(spawn => {
-            let score = 0;
+        // Try to find a spawn point that's safer (not near enemies)
+        const safeSpawns = shuffledSpawnPoints.filter(spawn => {
+            let isSafe = true;
             
-            // Check distance to teammates (prefer closer)
             Object.values(room.players).forEach(other => {
-                if (other.teamId === player.teamId && other !== player && other.isAlive) {
+                if (other.teamId !== player.teamId && other.isAlive) {
                     const dist = Math.sqrt((spawn.x - other.x) ** 2 + (spawn.y - other.y) ** 2);
-                    score += Math.max(0, 200 - dist); // Bonus for being near teammates
+                    if (dist < 150) { // Too close to enemy
+                        isSafe = false;
+                    }
                 }
             });
             
-            if (score > bestScore) {
-                bestScore = score;
-                bestSpawn = spawn;
-            }
+            return isSafe;
         });
         
-        spawnPoint = bestSpawn || room.spawnPoints[Math.floor(Math.random() * room.spawnPoints.length)];
-    } else {
-        // Random spawn for individual mode
-        const shuffledSpawnPoints = [...room.spawnPoints].sort(() => Math.random() - 0.5);
-        spawnPoint = shuffledSpawnPoints[0];
+        // Use a safe spawn if available, otherwise use random
+        if (safeSpawns.length > 0) {
+            spawnPoint = safeSpawns[0];
+        }
     }
     
     player.x = spawnPoint.x;
@@ -394,6 +398,7 @@ function gameLoop(room, deltaTime) {
     if (room.state !== 'PLAYING') return;
 
     updateLasers(room);
+    updateBots(room, deltaTime); // Update bot AI before physics
     updateKnights(room, deltaTime);
     updateProjectiles(room);
     updateSwordSlashes(room);
@@ -409,6 +414,9 @@ function gameLoop(room, deltaTime) {
 
     const winType = room.matchSettings?.winType || 'LAST_KNIGHT_STANDING';
     const now = Date.now();
+    
+    // Sanitize players for client emissions (removes bot AI circular refs)
+    const clientPlayers = sanitizePlayers(room.players);
 
     // Handle auto-respawn for time-based and kill-based modes
     if (winType === 'TIME_BASED' || winType === 'KILL_BASED') {
@@ -460,11 +468,11 @@ function gameLoop(room, deltaTime) {
                         const scoreTarget = room.matchSettings?.scoreTarget || SCORE_TO_WIN;
                         if (redTeam.score >= scoreTarget) {
                             room.state = 'MATCH_OVER';
-                            io.to(room.code).emit('matchOver', { winnerId: redTeam.id, players: room.players, hostId: room.hostId, isTeam: true });
+                            io.to(room.code).emit('matchOver', { winnerId: redTeam.id, players: clientPlayers, hostId: room.hostId, isTeam: true });
                             return;
                         }
                         
-                        io.to(room.code).emit('roundOver', { winnerId: redTeam.id, players: room.players, isTeam: true });
+                        io.to(room.code).emit('roundOver', { winnerId: redTeam.id, players: clientPlayers, isTeam: true });
                     }
                 } else if (blueLiving > 0 && redLiving === 0) {
                     // Blue team wins
@@ -476,11 +484,11 @@ function gameLoop(room, deltaTime) {
                         const scoreTarget = room.matchSettings?.scoreTarget || SCORE_TO_WIN;
                         if (blueTeam.score >= scoreTarget) {
                             room.state = 'MATCH_OVER';
-                            io.to(room.code).emit('matchOver', { winnerId: blueTeam.id, players: room.players, hostId: room.hostId, isTeam: true });
+                            io.to(room.code).emit('matchOver', { winnerId: blueTeam.id, players: clientPlayers, hostId: room.hostId, isTeam: true });
                             return;
                         }
                         
-                        io.to(room.code).emit('roundOver', { winnerId: blueTeam.id, players: room.players, isTeam: true });
+                        io.to(room.code).emit('roundOver', { winnerId: blueTeam.id, players: clientPlayers, isTeam: true });
                     }
                 } else if (livingKnights.length === 1) {
                     // Single player survives (shouldn't happen in team mode, but handle it)
@@ -496,11 +504,11 @@ function gameLoop(room, deltaTime) {
                     }
                     
                     room.roundWinner = winner;
-                    io.to(room.code).emit('roundOver', { winnerId: winner.id, players: room.players });
+                    io.to(room.code).emit('roundOver', { winnerId: winner.id, players: clientPlayers });
                 } else {
                     // Draw - no team has clear advantage
                     room.roundWinner = null;
-                    io.to(room.code).emit('roundOver', { winnerId: null, players: room.players, isDraw: true });
+                    io.to(room.code).emit('roundOver', { winnerId: null, players: clientPlayers, isDraw: true });
                 }
             } else {
                 // Individual LMS mode
@@ -512,14 +520,14 @@ function gameLoop(room, deltaTime) {
                     const scoreTarget = room.matchSettings?.scoreTarget || SCORE_TO_WIN;
                     if (winner.score >= scoreTarget) {
                         room.state = 'MATCH_OVER';
-                        io.to(room.code).emit('matchOver', { winnerId: winner.id, players: room.players, hostId: room.hostId });
+                        io.to(room.code).emit('matchOver', { winnerId: winner.id, players: clientPlayers, hostId: room.hostId });
                     }
                 } else {
                     room.roundWinner = null;
                 }
                 
                 if (room.state === 'ROUND_OVER') {
-                    io.to(room.code).emit('roundOver', { winnerId: room.roundWinner?.id, players: room.players });
+                    io.to(room.code).emit('roundOver', { winnerId: room.roundWinner?.id, players: clientPlayers });
                 }
             }
             
@@ -537,12 +545,12 @@ function gameLoop(room, deltaTime) {
             const winningTeam = room.teams.find(t => t.score >= scoreTarget);
             if (winningTeam) {
                 room.state = 'MATCH_OVER';
-                io.to(room.code).emit('matchOver', { winnerId: winningTeam.id, players: room.players, hostId: room.hostId, isTeam: true });
+                io.to(room.code).emit('matchOver', { winnerId: winningTeam.id, players: clientPlayers, hostId: room.hostId, isTeam: true });
                 return;
             }
         } else if (winner) {
             room.state = 'MATCH_OVER';
-            io.to(room.code).emit('matchOver', { winnerId: winner.id, players: room.players, hostId: room.hostId });
+            io.to(room.code).emit('matchOver', { winnerId: winner.id, players: clientPlayers, hostId: room.hostId });
         }
     } else if (winType === 'TIME_BASED') {
         // Emit timer updates every second
@@ -558,12 +566,12 @@ function gameLoop(room, deltaTime) {
             // Find player with most kills or team with most kills
             if (room.matchSettings?.playType === 'team') {
                 const winningTeam = room.teams.reduce((prev, current) => (prev.score > current.score) ? prev : current);
-                io.to(room.code).emit('matchOver', { winnerId: winningTeam.id, players: room.players, hostId: room.hostId, isTeam: true });
+                io.to(room.code).emit('matchOver', { winnerId: winningTeam.id, players: clientPlayers, hostId: room.hostId, isTeam: true });
             } else {
                 const players = Object.values(room.players);
                 players.sort((a, b) => b.score - a.score);
                 const winner = players[0];
-                io.to(room.code).emit('matchOver', { winnerId: winner.id, players: room.players, hostId: room.hostId });
+                io.to(room.code).emit('matchOver', { winnerId: winner.id, players: clientPlayers, hostId: room.hostId });
             }
         }
     }

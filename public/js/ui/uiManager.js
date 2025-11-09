@@ -48,8 +48,16 @@ function showNotification(message, duration = 2000) {
 export function showScreen(screenName) {
     const container = document.getElementById('game-container');
     container.innerHTML = ''; // Clear previous screen
-    document.getElementById('scoreboard').classList.add('hidden');
-    document.getElementById('player-hud').classList.add('hidden');
+    
+    // Hide and clear HUD and scoreboard
+    const scoreboard = document.getElementById('scoreboard');
+    const playerHud = document.getElementById('player-hud');
+    
+    scoreboard.classList.add('hidden');
+    scoreboard.innerHTML = ''; // Clear content
+    
+    playerHud.classList.add('hidden');
+    playerHud.innerHTML = ''; // Clear content
     
     // Remove any existing create room button
     const existingCreateBtn = document.getElementById('create-room-btn-fixed');
@@ -57,6 +65,8 @@ export function showScreen(screenName) {
         existingCreateBtn.remove();
     }
     
+    // Update global uiState
+    window.uiState = screenName;
     uiState = screenName;
 
     // Notify listeners about screen change (for cleanup like key handlers)
@@ -137,7 +147,7 @@ export function showScreen(screenName) {
         }
         
         screenHtml = `
-            <div id="LOBBY" class="ui-screen flex flex-col items-center p-8 bg-gray-800 rounded-lg shadow-xl w-[500px]">
+            <div id="LOBBY" class="ui-screen flex flex-col items-center p-8 bg-gray-800 rounded-lg shadow-xl w-[500px] max-h-[90vh]">
                 <h2 class="text-3xl mb-2">LOBBY</h2>
                 <div class="flex items-center gap-2 mb-2">
                     <p class="text-xl font-mono bg-gray-900 px-4 py-2 rounded-md"><span class="text-grey-400 text small">ROOM CODE: </span>${roomCode}</p>
@@ -155,9 +165,11 @@ export function showScreen(screenName) {
                     </div>
                     <button id="edit-settings-btn" class="hidden bg-gray-700 hover:bg-gray-600 text-white px-3 py-1 rounded text-xs">Edit</button>
                 </div>
-                <div id="player-list" class="flex flex-col items-center w-full gap-2 min-h-[100px]"></div>
+                <div id="player-list-container" class="flex-1 w-full overflow-y-auto mb-4" style="max-height: calc(90vh - 350px);">
+                    <div id="player-list" class="flex flex-col items-center w-full gap-2 min-h-[100px]"></div>
+                </div>
                 
-                <button id="start-game-btn" class="btn btn-green w-full mt-6 hidden">Start Game</button>
+                <button id="start-game-btn" class="btn btn-green w-full mt-auto hidden sticky bottom-0 z-10 shadow-lg">Start Game</button>
             </div>`;
     } else if (screenName === 'GAME') {
         screenHtml = `
@@ -197,9 +209,17 @@ function addEventListeners(screenName) {
                 document.getElementById('menu-error').textContent = 'Please enter room code';
                 return;
             }
-            window.joiningRoomCode = code;
-            window.inputSelectionState = null; // Start with input detection
-            showScreen('INPUT_SELECTION');
+            
+            // Check if room exists before proceeding
+            socket.emit('checkRoom', code, (response) => {
+                if (response.exists) {
+                    window.joiningRoomCode = code;
+                    window.inputSelectionState = null; // Start with input detection
+                    showScreen('INPUT_SELECTION');
+                } else {
+                    document.getElementById('menu-error').textContent = response.error || 'Room not found';
+                }
+            });
         };
         
         roomCodeInput.addEventListener('keypress', (e) => {
@@ -414,6 +434,7 @@ function addEventListeners(screenName) {
                 leaveBtn.onclick = () => {
                     if (confirm('Are you sure you want to leave the game?')) {
                         socket.emit('leaveGame', { roomCode }, () => {
+                            localPlayerManager.clearAllPlayers(); // Clear local players when leaving
                             window.roomCode = null; window.gameState = {}; window.myId = null; showScreen('MENU');
                         });
                     }
@@ -428,6 +449,7 @@ function addEventListeners(screenName) {
                 leaveBtn.onclick = () => {
                     if (confirm('Are you sure you want to leave the game?')) {
                         socket.emit('leaveGame', { roomCode }, () => {
+                            localPlayerManager.clearAllPlayers(); // Clear local players when leaving
                             window.roomCode = null; window.gameState = {}; window.myId = null; showScreen('MENU');
                         });
                     }
@@ -687,7 +709,10 @@ export function showMessage(text, duration, isMatchOver = false, matchData = nul
             leaveBtn.className = 'btn btn-red block mx-auto mt-6 text-2xl';
             leaveBtn.onclick = () => {
                 if (confirm('Are you sure you want to leave the game?')) {
-                    socket.emit('leaveGame', { roomCode }, () => { window.roomCode = null; window.gameState = {}; window.myId = null; showScreen('MENU'); });
+                    socket.emit('leaveGame', { roomCode }, () => { 
+                        localPlayerManager.clearAllPlayers(); // Clear local players when leaving
+                        window.roomCode = null; window.gameState = {}; window.myId = null; showScreen('MENU'); 
+                    });
                 }
             };
             messageEl.appendChild(leaveBtn);

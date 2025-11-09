@@ -82,13 +82,22 @@ export function updateLobbyUI() {
             localSection.appendChild(playerEl);
         });
         
-        // Add the "+ Add Local Player" button and controls INSIDE the local section
+        // Add the "+ Add Local Player" and "+ Add Bot" buttons and controls INSIDE the local section
         const addPlayerSection = document.createElement('div');
         addPlayerSection.className = 'w-full mt-3';
         addPlayerSection.innerHTML = `
-            <button id="add-local-player-btn" class="w-full px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded transition-colors">
-                + Add Local Player
-            </button>
+            <div class="flex gap-2">
+                ${playerCount < 8 ? `
+                <button id="add-local-player-btn" class="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded transition-colors">
+                    + Add Local Player
+                </button>
+                ` : ''}
+                ${myId === gameState.hostId && playerCount < 8 ? `
+                <button id="add-bot-btn" class="flex-1 px-4 py-2 bg-purple-700 hover:bg-purple-600 text-white text-sm rounded transition-colors">
+                    🤖 Add Bot
+                </button>
+                ` : ''}
+            </div>
             <div id="add-player-prompt" class="hidden mt-2 p-4 bg-gray-700 rounded text-center">
                 <p class="text-sm mb-2" id="add-player-prompt-text">Press <span class="text-green-400">ENTER</span> (keyboard) or <span class="text-blue-400">START</span> (controller)</p>
                 <button id="cancel-add-player-btn" class="text-xs text-gray-400 hover:text-white mt-2">Cancel</button>
@@ -103,6 +112,21 @@ export function updateLobbyUI() {
                     <button id="cancel-add-player-name-btn" class="btn bg-gray-600 hover:bg-gray-500">Cancel</button>
                 </div>
                 <p id="add-player-error" class="text-red-400 text-xs mt-1 h-4"></p>
+            </div>
+            <div id="add-bot-difficulty" class="hidden mt-2 p-4 bg-gray-700 rounded">
+                <p class="text-sm mb-3 text-center">Select Bot Difficulty:</p>
+                <div class="flex flex-col gap-2">
+                    <button data-difficulty="easy" class="bot-difficulty-btn px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded transition-colors">
+                        😊 Easy
+                    </button>
+                    <button data-difficulty="medium" class="bot-difficulty-btn px-4 py-2 bg-yellow-600 hover:bg-yellow-500 text-white rounded transition-colors">
+                        😐 Medium
+                    </button>
+                    <button data-difficulty="hard" class="bot-difficulty-btn px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded transition-colors">
+                        😈 Hard
+                    </button>
+                </div>
+                <button id="cancel-add-bot-btn" class="w-full mt-2 text-xs text-gray-400 hover:text-white">Cancel</button>
             </div>
         `;
         localSection.appendChild(addPlayerSection);
@@ -120,13 +144,22 @@ export function updateLobbyUI() {
         onlineTitle.textContent = '🌐 ONLINE PLAYERS';
         playerList.appendChild(onlineTitle);
     } else {
-        // If no local players yet, still add the button at the top
+        // If no local players yet, still add the buttons at the top
         const addPlayerSection = document.createElement('div');
         addPlayerSection.className = 'w-full mb-4';
         addPlayerSection.innerHTML = `
-            <button id="add-local-player-btn" class="w-full px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded transition-colors">
-                + Add Local Player
-            </button>
+            <div class="flex gap-2">
+                ${playerCount < 8 ? `
+                <button id="add-local-player-btn" class="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded transition-colors">
+                    + Add Local Player
+                </button>
+                ` : ''}
+                ${myId === gameState.hostId && playerCount < 8 ? `
+                <button id="add-bot-btn" class="flex-1 px-4 py-2 bg-purple-700 hover:bg-purple-600 text-white text-sm rounded transition-colors">
+                    🤖 Add Bot
+                </button>
+                ` : ''}
+            </div>
             <div id="add-player-prompt" class="hidden mt-2 p-4 bg-gray-700 rounded text-center">
                 <p class="text-sm mb-2" id="add-player-prompt-text">Press <span class="text-green-400">ENTER</span> (keyboard) or <span class="text-blue-400">START</span> (controller)</p>
                 <button id="cancel-add-player-btn" class="text-xs text-gray-400 hover:text-white mt-2">Cancel</button>
@@ -141,6 +174,21 @@ export function updateLobbyUI() {
                     <button id="cancel-add-player-name-btn" class="btn bg-gray-600 hover:bg-gray-500">Cancel</button>
                 </div>
                 <p id="add-player-error" class="text-red-400 text-xs mt-1 h-4"></p>
+            </div>
+            <div id="add-bot-difficulty" class="hidden mt-2 p-4 bg-gray-700 rounded">
+                <p class="text-sm mb-3 text-center">Select Bot Difficulty:</p>
+                <div class="flex flex-col gap-2">
+                    <button data-difficulty="easy" class="bot-difficulty-btn px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded transition-colors">
+                        😊 Easy
+                    </button>
+                    <button data-difficulty="medium" class="bot-difficulty-btn px-4 py-2 bg-yellow-600 hover:bg-yellow-500 text-white rounded transition-colors">
+                        😐 Medium
+                    </button>
+                    <button data-difficulty="hard" class="bot-difficulty-btn px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded transition-colors">
+                        😈 Hard
+                    </button>
+                </div>
+                <button id="cancel-add-bot-btn" class="w-full mt-2 text-xs text-gray-400 hover:text-white">Cancel</button>
             </div>
         `;
         playerList.appendChild(addPlayerSection);
@@ -186,9 +234,22 @@ export function updateLobbyUI() {
         playerEl.className = 'bg-gray-700 p-3 rounded-lg w-full max-w-md text-center text-lg flex items-center justify-between';
         playerEl.style.color = player.color;
         
+        const leftSection = document.createElement('div');
+        leftSection.className = 'flex items-center gap-2';
+        
+        // Add bot icon if this is a bot
+        if (player.isAI) {
+            const botIcon = document.createElement('span');
+            botIcon.textContent = '🤖';
+            botIcon.title = `Bot (${player.aiDifficulty || 'medium'})`;
+            leftSection.appendChild(botIcon);
+        }
+        
         const nameSpan = document.createElement('span');
         nameSpan.textContent = name;
-        playerEl.appendChild(nameSpan);
+        leftSection.appendChild(nameSpan);
+        
+        playerEl.appendChild(leftSection);
         
         // Show team info if in team mode
         if (isTeamMode) {
@@ -206,8 +267,9 @@ export function updateLobbyUI() {
             }
             playerEl.appendChild(teamInfo);
             
-            // Add team selection buttons for host
-            if (myId === gameState.hostId) {
+            // Add team selection buttons for host (only in lobby state)
+            const roomState = gameState.state || 'LOBBY';
+            if (myId === gameState.hostId && roomState === 'LOBBY') {
                 const buttonContainer = document.createElement('div');
                 buttonContainer.className = 'flex gap-1';
                 
@@ -225,6 +287,20 @@ export function updateLobbyUI() {
                 
                 playerEl.appendChild(buttonContainer);
             }
+        }
+        
+        // Add remove button for bots (host only)
+        if (player.isAI && myId === gameState.hostId) {
+            const removeBtn = document.createElement('button');
+            removeBtn.className = 'text-red-400 hover:text-red-300 text-xl leading-none ml-2';
+            removeBtn.textContent = '×';
+            removeBtn.title = 'Remove bot';
+            removeBtn.onclick = () => {
+                if (confirm(`Remove bot ${player.name}?`)) {
+                    socket.emit('removeBot', { roomCode: roomCode, botId: id });
+                }
+            };
+            playerEl.appendChild(removeBtn);
         }
         
         playerList.appendChild(playerEl);
@@ -258,4 +334,43 @@ export function updateLobbyUI() {
     
     // Setup add player button listeners after DOM is updated
     setupAddLocalPlayerUI();
+    setupAddBotUI();
+}
+
+function setupAddBotUI() {
+    const addBotBtn = document.getElementById('add-bot-btn');
+    const addBotDifficulty = document.getElementById('add-bot-difficulty');
+    const cancelAddBotBtn = document.getElementById('cancel-add-bot-btn');
+    const difficultyBtns = document.querySelectorAll('.bot-difficulty-btn');
+    
+    if (!addBotBtn) return;
+    
+    addBotBtn.addEventListener('click', () => {
+        // Show difficulty selection
+        addBotDifficulty.classList.remove('hidden');
+        addBotBtn.disabled = true;
+    });
+    
+    if (cancelAddBotBtn) {
+        cancelAddBotBtn.addEventListener('click', () => {
+            addBotDifficulty.classList.add('hidden');
+            addBotBtn.disabled = false;
+        });
+    }
+    
+    difficultyBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const difficulty = btn.getAttribute('data-difficulty');
+            
+            // Send request to server
+            socket.emit('addBot', {
+                roomCode: roomCode,
+                difficulty: difficulty
+            });
+            
+            // Hide difficulty selection
+            addBotDifficulty.classList.add('hidden');
+            addBotBtn.disabled = false;
+        });
+    });
 }

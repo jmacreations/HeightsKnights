@@ -45,7 +45,8 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
-    max-height: calc(100vh - 140px); /* Leave room for scoreboard and HUD */
+    height: calc(100vh - 180px); /* Fixed: 80px scoreboard + 100px HUD */
+    max-height: calc(100vh - 180px);
 }
 
 .ui-screen {
@@ -57,17 +58,21 @@ body {
 }
 
 #scoreboard {
-    max-height: 80px;
+    height: 80px; /* Fixed height prevents canvas jumping */
+    min-height: 80px;
     overflow-y: auto;
     overflow-x: hidden;
 }
 
 #player-hud {
-    min-height: 24px; /* Prevents layout shift when text appears */
-    max-height: 120px;
+    height: 100px; /* Fixed height prevents canvas jumping */
+    min-height: 100px;
     overflow-y: auto;
     overflow-x: hidden;
     padding: 0.5rem;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
 }
 
 /* Custom slider styling */
@@ -95,4 +100,28 @@ input[type="range"]::-moz-range-thumb {
     background: #10b981;
     cursor: pointer;
     border: 2px solid #1f2937;
+}
+
+/* Scrollbar styling for lobby player list */
+#player-list-container {
+    scrollbar-width: thin;
+    scrollbar-color: #4b5563 #1f2937;
+}
+
+#player-list-container::-webkit-scrollbar {
+    width: 8px;
+}
+
+#player-list-container::-webkit-scrollbar-track {
+    background: #1f2937;
+    border-radius: 4px;
+}
+
+#player-list-container::-webkit-scrollbar-thumb {
+    background: #4b5563;
+    border-radius: 4px;
+}
+
+#player-list-container::-webkit-scrollbar-thumb:hover {
+    background: #6b7280;
 }

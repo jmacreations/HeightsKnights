@@ -8,6 +8,7 @@ const { getMaps, getMapById } = require('./utils/maps');
 const { createNewPlayer, handleLunge } = require('./game_logic/player');
 const { handleAttackStart, handleAttackEnd } = require('./game_logic/weapons');
 const { GAME_MODES } = require('../public/js/config.js');
+const { getRandomBotName, DIFFICULTY_SETTINGS } = require('./game_logic/bot_ai');
 
 const app = express();
 const server = http.createServer(app);
@@ -102,6 +103,21 @@ io.on('connection', (socket) => {
         socket.emit('roomCreated', { roomCode, roomState: room, myId: socket.id });
     });
 
+    // Check if room exists (before player enters name)
+    socket.on('checkRoom', (roomCode, callback) => {
+        const room = gameRooms[roomCode];
+        if (!room) {
+            callback({ exists: false, error: 'Room not found' });
+        } else {
+            const playerCount = Object.keys(room.players).length;
+            if (playerCount >= 8) {
+                callback({ exists: false, error: 'Room is full' });
+            } else {
+                callback({ exists: true });
+            }
+        }
+    });
+    
     socket.on('joinRoom', ({ roomCode, playerName }) => {
         const room = gameRooms[roomCode];
         if (!room) { socket.emit('joinError', 'Room not found.'); return; }
@@ -120,7 +136,8 @@ io.on('connection', (socket) => {
         
         room.players[socket.id] = player;
         socket.emit('joinSuccess', { roomCode, roomState: room, myId: socket.id });
-        socket.to(roomCode).emit('updateLobby', room);
+        const sanitizedRoom = sanitizeGameState(room);
+        socket.to(roomCode).emit('updateLobby', sanitizedRoom);
     });
     
     // Register local players for local multiplayer
@@ -134,6 +151,15 @@ io.on('connection', (socket) => {
         if (room.players[socket.id]) {
             delete room.players[socket.id];
         }
+        
+        // First, remove any existing players from this socket that are already in THIS room
+        // This prevents duplicates when re-registering
+        Object.keys(room.players).forEach(playerId => {
+            if (room.players[playerId].socketId === socket.id) {
+                console.log(`  Removing existing local player: ${room.players[playerId].name} (${playerId})`);
+                delete room.players[playerId];
+            }
+        });
         
         // Add each local player
         players.forEach((playerData, index) => {
@@ -156,7 +182,106 @@ io.on('connection', (socket) => {
         });
         
         // Update lobby for all clients
-        io.to(roomCode).emit('updateLobby', room);
+        const sanitizedRoom = sanitizeGameState(room);
+        io.to(roomCode).emit('updateLobby', sanitizedRoom);
+    });
+    
+    socket.on('addBot', ({ roomCode, difficulty, name }) => {
+        const room = gameRooms[roomCode];
+        if (!room) {
+            socket.emit('botError', 'Room not found');
+            return;
+        }
+        
+        // Only host can add bots
+        if (room.hostId !== socket.id) {
+            socket.emit('botError', 'Only the host can add bots');
+            return;
+        }
+        
+        // Check player limit
+        const currentPlayerCount = Object.keys(room.players).length;
+        if (currentPlayerCount >= 8) {
+            socket.emit('botError', 'Room is full (8/8 players)');
+            return;
+        }
+        
+        // Validate difficulty
+        const validDifficulty = difficulty || 'medium';
+        if (!['easy', 'medium', 'hard'].includes(validDifficulty)) {
+            socket.emit('botError', 'Invalid difficulty');
+            return;
+        }
+        
+        // Generate bot name
+        const existingNames = Object.values(room.players).map(p => p.name);
+        const botName = name || getRandomBotName(existingNames);
+        
+        // Create bot ID
+        const botId = `bot_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        
+        // Create bot player
+        const usedColors = Object.values(room.players).map(p => p.color);
+        const availColor = availableColors.find(c => !usedColors.includes(c)) || availableColors[0];
+        
+        const bot = createNewPlayer(botId, botName, availColor);
+        bot.isAI = true;
+        bot.aiDifficulty = validDifficulty;
+        bot.socketId = botId;
+        
+        // Assign team if team mode
+        if (room.matchSettings?.playType === 'team') {
+            assignTeamToPlayer(bot, room, botName, roomCode);
+        }
+        
+        room.players[botId] = bot;
+        
+        console.log(`Bot '${botName}' (${validDifficulty}) added to room ${roomCode} by ${socket.id}`);
+        
+        // Notify all players
+        io.to(roomCode).emit('playerJoined', { 
+            players: room.players, 
+            teams: room.teams,
+            hostId: room.hostId 
+        });
+    });
+    
+    socket.on('removeBot', ({ roomCode, botId }) => {
+        const room = gameRooms[roomCode];
+        if (!room) {
+            socket.emit('botError', 'Room not found');
+            return;
+        }
+        
+        // Only host can remove bots
+        if (room.hostId !== socket.id) {
+            socket.emit('botError', 'Only the host can remove bots');
+            return;
+        }
+        
+        const bot = room.players[botId];
+        if (!bot) {
+            socket.emit('botError', 'Bot not found');
+            return;
+        }
+        
+        if (!bot.isAI) {
+            socket.emit('botError', 'Cannot remove human players this way');
+            return;
+        }
+        
+        const botName = bot.name;
+        delete room.players[botId];
+        
+        console.log(`Bot '${botName}' removed from room ${roomCode} by ${socket.id}`);
+        
+        // Notify all players
+        io.to(roomCode).emit('playerLeft', { 
+            playerId: botId, 
+            players: room.players,
+            teams: room.teams,
+            hostId: room.hostId
+        });
     });
     
     socket.on('startGame', (roomCode) => {
@@ -230,7 +355,9 @@ io.on('connection', (socket) => {
         const player = room.players[data.playerId];
         if (player) {
             player.teamId = data.teamId;
-            io.to(data.roomCode).emit('updateLobby', room);
+            // Sanitize room state before sending to clients
+            const sanitizedRoom = sanitizeGameState(room);
+            io.to(data.roomCode).emit('updateLobby', sanitizedRoom);
         }
     });
 
@@ -283,7 +410,12 @@ io.on('connection', (socket) => {
             room.swordSlashes = [];
             room.laserBeams = [];
             room.destroyedWalls = [];
-            io.to(roomCode).emit('returnToLobby', room);
+            room.mines = [];
+            room.explosions = [];
+            
+            // Sanitize room state before sending to clients
+            const sanitizedRoom = sanitizeGameState(room);
+            io.to(roomCode).emit('returnToLobby', sanitizedRoom);
             ack && ack({ ok: true });
         } catch (e) {
             ack && ack({ ok: false, error: e.message });
@@ -298,34 +430,94 @@ io.on('connection', (socket) => {
                 ack && ack({ ok: true });
                 return;
             }
-            // Remove player
-            delete room.players[socket.id];
-            // If no players left, delete room
+            
+            // Remove all players associated with this socket (main player + local players)
+            const leavingPlayerIds = [];
+            for (const playerId in room.players) {
+                const player = room.players[playerId];
+                if (!player.isAI && (player.id === socket.id || player.socketId === socket.id)) {
+                    leavingPlayerIds.push(playerId);
+                }
+            }
+            
+            leavingPlayerIds.forEach(playerId => {
+                delete room.players[playerId];
+                console.log(`  Player left: ${playerId}`);
+            });
+            
+            // Check if any human players remain
+            const humanPlayers = Object.values(room.players).filter(p => !p.isAI);
+            
+            // If no human players remain, delete the room (removes all bots)
+            if (humanPlayers.length === 0) {
+                delete gameRooms[roomCode];
+                console.log(`Room ${roomCode} has no human players left and has been deleted.`);
+                ack && ack({ ok: true });
+                return;
+            }
+            
+            // If no players left at all, delete room
             if (Object.keys(room.players).length === 0) {
                 delete gameRooms[roomCode];
                 ack && ack({ ok: true });
                 return;
             }
-            // Reassign host if needed
+            
+            // Reassign host if needed (must be a human player)
             if (room.hostId === socket.id) {
-                const newHostId = Object.keys(room.players)[0];
-                room.hostId = newHostId;
+                const humanPlayer = humanPlayers[0];
+                if (humanPlayer) {
+                    const newHostId = humanPlayer.socketId || humanPlayer.id;
+                    room.hostId = newHostId;
+                    console.log(`Host left. New host is ${newHostId}`);
+                    io.to(roomCode).emit('hostChanged', { 
+                        newHostId: newHostId,
+                        roomCode: roomCode
+                    });
+                }
             }
-            // Only send remaining players to lobby if just one player remains
-            if (Object.keys(room.players).length === 1) {
+            
+            // Only send remaining players to lobby if just one human player remains
+            if (humanPlayers.length === 1 && (room.state === 'PLAYING' || room.state === 'GAME' || room.state === 'COUNTDOWN' || room.state === 'ROUND_OVER')) {
+                // Clear any countdown intervals
+                if (room.countdownInterval) {
+                    try { clearInterval(room.countdownInterval); } catch {}
+                    room.countdownInterval = null;
+                }
+                
                 // Reset scores when returning to lobby
                 Object.values(room.players).forEach(p => {
                     p.score = 0;
                 });
+                
                 // Reset team scores for team modes
                 if (room.teams) {
                     room.teams.forEach(team => {
                         team.score = 0;
                     });
                 }
+                
+                // Clear game entities
+                room.walls = [];
+                room.projectiles = [];
+                room.powerups = [];
+                room.swordSlashes = [];
+                room.laserBeams = [];
+                room.mines = [];
+                room.explosions = [];
+                room.destroyedWalls = [];
+                
                 room.state = 'LOBBY';
-                io.to(roomCode).emit('returnToLobby', room);
+                
+                // Sanitize room state before sending to clients
+                const sanitizedRoom = sanitizeGameState(room);
+                io.to(roomCode).emit('returnToLobby', sanitizedRoom);
+            } else {
+                // Notify remaining players
+                const sanitizedRoom = sanitizeGameState(room);
+                io.to(roomCode).emit('updateLobby', sanitizedRoom);
             }
+            
             // Acknowledge to the leaver so client can go to MENU
             ack && ack({ ok: true });
         } catch (e) {
@@ -418,7 +610,8 @@ io.on('connection', (socket) => {
             room.matchSettings = next;
             // Broadcast updated settings and lobby state for UI refresh
             io.to(roomCode).emit('matchSettingsUpdated', next);
-            io.to(roomCode).emit('updateLobby', room);
+            const sanitizedRoom = sanitizeGameState(room);
+            io.to(roomCode).emit('updateLobby', sanitizedRoom);
             ack && ack({ ok: true });
         } catch (err) {
             ack && ack({ ok: false, error: err.message });
@@ -447,10 +640,11 @@ io.on('connection', (socket) => {
             console.log(`Socket ${socket.id} disconnected from room ${roomCodeOfDisconnectedPlayer}`);
             
             // Remove all players associated with this socket (main player + local players)
+            // Explicitly skip bots - they can only be removed via removeBot command
             const disconnectedPlayerIds = [];
             for (const playerId in roomOfDisconnectedPlayer.players) {
                 const player = roomOfDisconnectedPlayer.players[playerId];
-                if (player.id === socket.id || player.socketId === socket.id) {
+                if (!player.isAI && (player.id === socket.id || player.socketId === socket.id)) {
                     disconnectedPlayerIds.push(playerId);
                 }
             }
@@ -461,51 +655,155 @@ io.on('connection', (socket) => {
             });
 
             const remaining = Object.keys(roomOfDisconnectedPlayer.players).length;
+            const humanPlayers = Object.values(roomOfDisconnectedPlayer.players).filter(p => !p.isAI);
+            
+            // If no human players remain, delete the room (remove all bots)
+            if (humanPlayers.length === 0) {
+                delete gameRooms[roomCodeOfDisconnectedPlayer];
+                console.log(`Room ${roomCodeOfDisconnectedPlayer} has no human players left and has been deleted.`);
+                return;
+            }
             
             if (remaining === 0) {
                 delete gameRooms[roomCodeOfDisconnectedPlayer];
                 console.log(`Room ${roomCodeOfDisconnectedPlayer} is empty and has been deleted.`);
             } else {
-                // If the host disconnected, assign a new host
+                // If the host disconnected, assign a new host (must be a human player)
                 if (roomOfDisconnectedPlayer.hostId === socket.id) {
-                    // Find a remaining player and use their socket ID as the new host
-                    const remainingPlayers = Object.values(roomOfDisconnectedPlayer.players);
-                    const firstPlayer = remainingPlayers[0];
+                    // Find a human player to be the new host
+                    const humanPlayer = humanPlayers[0];
                     
-                    // Get the socket ID: for primary players it's their id, for local players it's socketId
-                    const newHostSocketId = firstPlayer.socketId || firstPlayer.id;
-                    roomOfDisconnectedPlayer.hostId = newHostSocketId;
-                    console.log(`Host disconnected. New host is ${newHostSocketId}`);
-                    
-                    // Notify all players of the new host
-                    io.to(roomCodeOfDisconnectedPlayer).emit('hostChanged', { 
-                        newHostId: newHostSocketId,
-                        roomCode: roomCodeOfDisconnectedPlayer
-                    });
+                    if (humanPlayer) {
+                        // Get the socket ID: for primary players it's their id, for local players it's socketId
+                        const newHostSocketId = humanPlayer.socketId || humanPlayer.id;
+                        roomOfDisconnectedPlayer.hostId = newHostSocketId;
+                        console.log(`Host disconnected. New host is ${newHostSocketId}`);
+                        
+                        // Notify all players of the new host
+                        io.to(roomCodeOfDisconnectedPlayer).emit('hostChanged', { 
+                            newHostId: newHostSocketId,
+                            roomCode: roomCodeOfDisconnectedPlayer
+                        });
+                    }
                 }
                 
-                // Return to lobby if only ONE PLAYER remains (regardless of client count)
+                // Return to lobby if only ONE HUMAN remains (bots don't count)
                 // This allows local multiplayer to continue even if the only client has multiple players
-                if (remaining === 1 && (roomOfDisconnectedPlayer.state === 'PLAYING' || roomOfDisconnectedPlayer.state === 'GAME')) {
-                    console.log(`Only 1 player remains - returning to lobby`);
+                if (humanPlayers.length === 1 && (roomOfDisconnectedPlayer.state === 'PLAYING' || roomOfDisconnectedPlayer.state === 'GAME' || roomOfDisconnectedPlayer.state === 'COUNTDOWN' || roomOfDisconnectedPlayer.state === 'ROUND_OVER')) {
+                    console.log(`Only 1 human player remains - returning to lobby`);
+                    
+                    // Clear any countdown intervals
+                    if (roomOfDisconnectedPlayer.countdownInterval) {
+                        try { clearInterval(roomOfDisconnectedPlayer.countdownInterval); } catch {}
+                        roomOfDisconnectedPlayer.countdownInterval = null;
+                    }
+                    
                     // Reset scores when returning to lobby
                     Object.values(roomOfDisconnectedPlayer.players).forEach(p => {
                         p.score = 0;
                     });
+                    
+                    // Reset team scores
+                    if (roomOfDisconnectedPlayer.teams) {
+                        roomOfDisconnectedPlayer.teams.forEach(team => {
+                            team.score = 0;
+                        });
+                    }
+                    
+                    // Clear game entities
+                    roomOfDisconnectedPlayer.walls = [];
+                    roomOfDisconnectedPlayer.projectiles = [];
+                    roomOfDisconnectedPlayer.powerups = [];
+                    roomOfDisconnectedPlayer.swordSlashes = [];
+                    roomOfDisconnectedPlayer.laserBeams = [];
+                    roomOfDisconnectedPlayer.mines = [];
+                    roomOfDisconnectedPlayer.explosions = [];
+                    roomOfDisconnectedPlayer.destroyedWalls = [];
+                    
                     roomOfDisconnectedPlayer.state = 'LOBBY';
-                    if (roomOfDisconnectedPlayer.countdownInterval) { try { clearInterval(roomOfDisconnectedPlayer.countdownInterval); } catch {} }
-                    io.to(roomCodeOfDisconnectedPlayer).emit('returnToLobby', { 
-                        ...roomOfDisconnectedPlayer,
-                        roomCode: roomCodeOfDisconnectedPlayer
-                    });
+                    
+                    // Sanitize room state before sending to clients
+                    const sanitizedRoom = sanitizeGameState(roomOfDisconnectedPlayer);
+                    io.to(roomCodeOfDisconnectedPlayer).emit('returnToLobby', sanitizedRoom);
                 } else {
                     // Otherwise, continue the match; lobby UI can be refreshed if needed
-                    io.to(roomCodeOfDisconnectedPlayer).emit('updateLobby', roomOfDisconnectedPlayer);
+                    const sanitizedLobbyRoom = sanitizeGameState(roomOfDisconnectedPlayer);
+                    io.to(roomCodeOfDisconnectedPlayer).emit('updateLobby', sanitizedLobbyRoom);
                 }
             }
         }
     });
 });
+
+// Function to sanitize game state for client (remove circular refs and AI internals)
+function sanitizeGameState(room) {
+    // Create a clean object with only serializable data
+    const sanitized = {
+        state: room.state,
+        hostId: room.hostId,
+        code: room.code,
+        gameMode: room.gameMode,
+        mapId: room.mapId,
+        mapWidth: room.mapWidth,
+        mapHeight: room.mapHeight,
+        matchSettings: room.matchSettings,
+        roundWinner: room.roundWinner ? { id: room.roundWinner.id, name: room.roundWinner.name } : null,
+        countdownRemaining: room.countdownRemaining,
+        matchEndTime: room.matchEndTime,
+        
+        // Sanitize players - remove AI internal state
+        players: {},
+        
+        // Copy arrays/objects that are safe
+        walls: room.walls,
+        projectiles: room.projectiles,
+        powerups: room.powerups,
+        swordSlashes: room.swordSlashes,
+        laserBeams: room.laserBeams,
+        mines: room.mines,
+        explosions: room.explosions,
+        teams: room.teams,
+        destroyedWalls: room.destroyedWalls
+    };
+    
+    // Clean up player objects - remove AI internal state
+    for (const id in room.players) {
+        const player = room.players[id];
+        sanitized.players[id] = {
+            id: player.id,
+            name: player.name,
+            color: player.color,
+            x: player.x,
+            y: player.y,
+            vx: player.vx,
+            vy: player.vy,
+            angle: player.angle,
+            isAlive: player.isAlive,
+            score: player.score,
+            weapon: player.weapon,
+            isLunging: player.isLunging,
+            lungeEndTime: player.lungeEndTime,
+            lastLungeTime: player.lastLungeTime,
+            hasShield: player.hasShield,
+            shieldActive: player.shieldActive,
+            shieldEnergy: player.shieldEnergy,
+            bowChargeStartTime: player.bowChargeStartTime,
+            grenadeChargeStartTime: player.grenadeChargeStartTime,
+            laserChargeTime: player.laserChargeTime,
+            parryEndTime: player.parryEndTime,
+            isInvulnerable: player.isInvulnerable,
+            invulnerableUntil: player.invulnerableUntil,
+            respawnTime: player.respawnTime,
+            teamId: player.teamId,
+            socketId: player.socketId,
+            isAI: player.isAI,
+            aiDifficulty: player.aiDifficulty
+            // Exclude: aiState, aiTarget, aiMemory, etc.
+        };
+    }
+    
+    return sanitized;
+}
 
 // Main Game Loop Interval
 setInterval(() => {
@@ -517,7 +815,10 @@ setInterval(() => {
         room.code = roomCode;
         gameLoop(room, deltaTime);
         room.laserBeams = room.laserBeams.filter(beam => now - beam.startTime < 500);
-        io.to(roomCode).emit('gameState', room);
+        
+        // Sanitize state before sending to clients
+        const clientState = sanitizeGameState(room);
+        io.to(roomCode).emit('gameState', clientState);
     }
 }, 1000 / 30);
 
@@ -542,6 +843,8 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(`\nServer Commands:`);
     console.log(`  setHost <roomCode> <playerId> - Set a new host for a room`);
     console.log(`  listRooms - List all active rooms`);
+    console.log(`  addBot <roomCode> [difficulty] [name] - Add a bot (easy/medium/hard)`);
+    console.log(`  Type 'help' for all commands`);
 });
 
 // CLI Command Handler
@@ -606,10 +909,199 @@ rl.on('line', (line) => {
             console.log(`    Players: ${Object.entries(room.players).map(([id, p]) => `${p.name} (${id})`).join(', ')}`);
         }
         
+    } else if (command === 'addBot') {
+        const roomCode = args[1]?.toUpperCase();
+        const difficulty = args[2]?.toLowerCase() || 'medium';
+        const customName = args.slice(3).join(' ');
+        
+        if (!roomCode) {
+            console.log('Usage: addBot <roomCode> [difficulty] [name]');
+            console.log('Difficulties: easy, medium, hard');
+            return;
+        }
+        
+        const room = gameRooms[roomCode];
+        if (!room) {
+            console.log(`Error: Room ${roomCode} not found`);
+            return;
+        }
+        
+        if (!['easy', 'medium', 'hard'].includes(difficulty)) {
+            console.log(`Error: Invalid difficulty '${difficulty}'. Use: easy, medium, hard`);
+            return;
+        }
+        
+        // Check max player limit
+        const currentPlayerCount = Object.keys(room.players).length;
+        if (currentPlayerCount >= 8) {
+            console.log(`Error: Room ${roomCode} is full (8/8 players)`);
+            return;
+        }
+        
+        // Generate bot name
+        const existingNames = Object.values(room.players).map(p => p.name);
+        const botName = customName || getRandomBotName(existingNames);
+        
+        // Create bot ID
+        const botId = `bot_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        
+        // Create bot player
+        const availableColors = ['#4ade80', '#f87171', '#60aeff', '#fbbf24', '#a78bfa', '#f472b6', '#6134d3ff', '#9ca3af'];
+        const usedColors = Object.values(room.players).map(p => p.color);
+        const availColor = availableColors.find(c => !usedColors.includes(c)) || availableColors[0];
+        
+        const bot = createNewPlayer(botId, botName, availColor);
+        bot.isAI = true;
+        bot.aiDifficulty = difficulty;
+        bot.socketId = botId; // Bots use their ID as socket ID
+        
+        // Assign team if team mode
+        if (room.matchSettings?.playType === 'team') {
+            assignTeamToPlayer(bot, room, botName, roomCode);
+        }
+        
+        room.players[botId] = bot;
+        
+        console.log(`✓ Bot '${botName}' (${difficulty}) added to room ${roomCode} [ID: ${botId}]`);
+        
+        // Notify all players
+        io.to(roomCode).emit('playerJoined', { 
+            players: room.players, 
+            teams: room.teams,
+            hostId: room.hostId 
+        });
+        
+    } else if (command === 'removeBot') {
+        const roomCode = args[1]?.toUpperCase();
+        const botId = args[2];
+        
+        if (!roomCode || !botId) {
+            console.log('Usage: removeBot <roomCode> <botId>');
+            return;
+        }
+        
+        const room = gameRooms[roomCode];
+        if (!room) {
+            console.log(`Error: Room ${roomCode} not found`);
+            return;
+        }
+        
+        const bot = room.players[botId];
+        if (!bot) {
+            console.log(`Error: Bot ${botId} not found in room ${roomCode}`);
+            console.log(`Available bots:`, Object.entries(room.players)
+                .filter(([_, p]) => p.isAI)
+                .map(([id, p]) => `${p.name} (${id})`)
+                .join(', ') || 'None');
+            return;
+        }
+        
+        if (!bot.isAI) {
+            console.log(`Error: ${botId} is not a bot`);
+            return;
+        }
+        
+        const botName = bot.name;
+        delete room.players[botId];
+        
+        console.log(`✓ Bot '${botName}' removed from room ${roomCode}`);
+        
+        // Notify all players
+        io.to(roomCode).emit('playerLeft', { 
+            playerId: botId, 
+            players: room.players,
+            teams: room.teams,
+            hostId: room.hostId
+        });
+        
+    } else if (command === 'listBots') {
+        const roomCode = args[1]?.toUpperCase();
+        
+        if (!roomCode) {
+            console.log('Usage: listBots <roomCode>');
+            return;
+        }
+        
+        const room = gameRooms[roomCode];
+        if (!room) {
+            console.log(`Error: Room ${roomCode} not found`);
+            return;
+        }
+        
+        const bots = Object.entries(room.players).filter(([_, p]) => p.isAI);
+        
+        if (bots.length === 0) {
+            console.log(`No bots in room ${roomCode}`);
+            return;
+        }
+        
+        console.log(`\nBots in room ${roomCode}:`);
+        bots.forEach(([id, bot]) => {
+            const state = bot.aiState || 'N/A';
+            const target = bot.aiTarget ? 
+                (bot.aiTarget.name || `(${bot.aiTarget.x?.toFixed(0)}, ${bot.aiTarget.y?.toFixed(0)})`) : 
+                'None';
+            console.log(`  ${bot.name} [${id}]`);
+            console.log(`    Difficulty: ${bot.aiDifficulty}, State: ${state}, Target: ${target}`);
+            console.log(`    Alive: ${bot.isAlive}, Score: ${bot.score}, Weapon: ${bot.weapon?.type || 'none'}`);
+        });
+        
+    } else if (command === 'debugBot') {
+        const roomCode = args[1]?.toUpperCase();
+        const botId = args[2];
+        
+        if (!roomCode || !botId) {
+            console.log('Usage: debugBot <roomCode> <botId>');
+            return;
+        }
+        
+        const room = gameRooms[roomCode];
+        if (!room) {
+            console.log(`Error: Room ${roomCode} not found`);
+            return;
+        }
+        
+        const bot = room.players[botId];
+        if (!bot) {
+            console.log(`Error: Bot ${botId} not found`);
+            return;
+        }
+        
+        if (!bot.isAI) {
+            console.log(`Error: ${botId} is not a bot`);
+            return;
+        }
+        
+        console.log(`\n=== Bot Debug: ${bot.name} [${botId}] ===`);
+        console.log(`Difficulty: ${bot.aiDifficulty}`);
+        console.log(`Position: (${bot.x?.toFixed(1)}, ${bot.y?.toFixed(1)})`);
+        console.log(`Velocity: (${bot.vx?.toFixed(2)}, ${bot.vy?.toFixed(2)})`);
+        console.log(`Angle: ${(bot.angle * 180 / Math.PI)?.toFixed(1)}°`);
+        console.log(`Alive: ${bot.isAlive}, Score: ${bot.score}`);
+        console.log(`Weapon: ${bot.weapon?.type}, Ammo: ${bot.weapon?.ammo}`);
+        console.log(`Shield: ${bot.hasShield}, Active: ${bot.shieldActive}`);
+        console.log(`\nAI State: ${bot.aiState}`);
+        if (bot.aiTarget) {
+            console.log(`Target: ${bot.aiTarget.name || 'Object'}`);
+            if (bot.aiTarget.x !== undefined) {
+                console.log(`  Position: (${bot.aiTarget.x.toFixed(1)}, ${bot.aiTarget.y.toFixed(1)})`);
+            }
+        } else {
+            console.log(`Target: None`);
+        }
+        if (bot.aiMemory) {
+            console.log(`Strafe Direction: ${bot.aiMemory.strafeDirection}`);
+            console.log(`Danger Zones: ${bot.aiMemory.dangerZones?.length || 0}`);
+        }
+        
     } else if (command === 'help') {
         console.log('\nAvailable Commands:');
         console.log('  setHost <roomCode> <playerId> - Set a new host for a room');
         console.log('  listRooms - List all active rooms with players');
+        console.log('  addBot <roomCode> [difficulty] [name] - Add a bot to a room (difficulty: easy/medium/hard)');
+        console.log('  removeBot <roomCode> <botId> - Remove a bot from a room');
+        console.log('  listBots <roomCode> - List all bots in a room with their state');
+        console.log('  debugBot <roomCode> <botId> - Show detailed debug info for a bot');
         console.log('  help - Show this help message');
         
     } else if (command) {
